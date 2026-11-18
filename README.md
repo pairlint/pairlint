@@ -51,14 +51,15 @@ npx pairlint
 
 `pairlint.config.json` accepts comments and trailing commas.
 
-| Setting  | What it does                                                                        | Default     |
-| -------- | ----------------------------------------------------------------------------------- | ----------- |
-| `tokens` | Token files for a single mode.                                                      |             |
-| `modes`  | Token files per mode, as `{ "light": [...], "dark": [...] }`. Use this or `tokens`. |             |
-| `pairs`  | Which tokens are checked against which. Required.                                   |             |
-| `level`  | `"AA"` or `"AAA"`.                                                                  | `"AA"`      |
-| `base`   | The color translucent backgrounds sit on. One color, or one per mode.               | `"#ffffff"` |
-| `format` | `"auto"`, `"dtcg"` or `"tokens-studio"`.                                            | `"auto"`    |
+| Setting    | What it does                                                                                                         | Default                    |
+| ---------- | -------------------------------------------------------------------------------------------------------------------- | -------------------------- |
+| `tokens`   | Token files for a single mode.                                                                                       |                            |
+| `modes`    | Token files per mode, as `{ "light": [...], "dark": [...] }`. Use this or `tokens`.                                  |                            |
+| `pairs`    | Which tokens are checked against which. Required.                                                                    |                            |
+| `level`    | `"AA"` or `"AAA"`.                                                                                                   | `"AA"`                     |
+| `base`     | The color translucent backgrounds sit on. One color, or one per mode.                                                | `"#ffffff"`                |
+| `format`   | `"auto"`, `"dtcg"` or `"tokens-studio"`.                                                                             | `"auto"`                   |
+| `baseline` | The baseline file, relative to the config. See [Adopting pairlint](#adopting-pairlint-on-an-existing-design-system). | `"pairlint.baseline.json"` |
 
 ### Pairs
 
@@ -135,13 +136,15 @@ WCAG 2 contrast is defined in sRGB. Colors outside sRGB are brought in with the 
 ```
 pairlint [check] [options]
 pairlint explain <fg> <bg> [options]
+pairlint baseline --reason <text> --owner <name> [--expires <date>]
 
   -c, --config <path>   Config file (default: ./pairlint.config.json)
   -f, --format <name>   text, json, sarif, markdown or html (default: text)
   -o, --output <path>   Write the report to a file instead of the terminal
   -l, --level <level>   AA or AAA, overrides the config
   -m, --mode <name>     Check only this mode. Repeat for more than one
-      --verbose         List passing and exempt pairs too
+      --verbose         List passing, exempt and baselined pairs too
+      --ignore-baseline Report baselined failures as failures
       --color           Force colored output
       --no-color        Disable colored output
 ```
@@ -194,6 +197,45 @@ color.text.secondary on color.surface.raised (dark)
 ```
 
 It shows every alias step, each token's own color, the base color, and the colors after blending. It works for any two tokens, even ones not in your pairs, which are then checked as body text. Add `--mode` to limit it to one mode, or `--format json` for scripts.
+
+## Adopting pairlint on an existing design system
+
+A large token set will probably have failures on day one. A baseline lets you turn pairlint on now and fail only on new problems.
+
+```sh
+npx pairlint baseline --reason "Gray ramp redesign, planned for Q1" --owner @design-systems --expires 2027-03-31
+```
+
+This writes `pairlint.baseline.json` with one entry per current failure:
+
+```json
+{
+  "version": 1,
+  "entries": [
+    {
+      "mode": "dark",
+      "fg": "color.text.secondary",
+      "bg": "color.surface.raised",
+      "use": "body",
+      "reason": "Gray ramp redesign, planned for Q1",
+      "owner": "@design-systems",
+      "expires": "2027-03-31"
+    }
+  ]
+}
+```
+
+Commit it. From then on:
+
+- A failure listed in the baseline is reported as **baselined** and does not fail the build.
+- Every entry needs a `reason` and an `owner`. pairlint refuses entries without them, so nothing is accepted silently.
+- After its `expires` date, an entry stops counting and the pair fails again, with its owner and reason shown. Leave `expires` out to accept a failure until it is fixed.
+- Entries are matched by mode, tokens and use, not by color. Changing the color re-checks the pair.
+- When a baselined pair passes, or is no longer checked, pairlint warns you to remove its entry.
+- Running `pairlint baseline` again keeps existing entries with their reasons, adds new failures with the reason and owner you give, and removes entries that are no longer needed. Edit the file by hand to give single entries better reasons.
+- `--ignore-baseline` shows every failure, baselined or not.
+
+Pairs that cannot be checked at all, like a broken alias, can never be baselined. Fix those first.
 
 ## GitHub Actions
 

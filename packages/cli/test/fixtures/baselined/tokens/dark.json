@@ -1,0 +1,19 @@
+{
+  "color": {
+    "$type": "color",
+    "text": {
+      "primary": { "$value": "{color.gray.50}" },
+      "secondary": { "$value": "{color.gray.500}" },
+      "disabled": { "$value": "{color.gray.700}" },
+      "link": { "$value": "color(display-p3 0.3 0.75 1)" }
+    },
+    "surface": {
+      "base": { "$value": "{color.gray.950}" },
+      "raised": { "$value": "{color.gray.900}" },
+      "overlay": { "$value": "rgb(255 255 255 / 12%)" }
+    },
+    "border": {
+      "default": { "$value": "{color.gray.700}" }
+    }
+  }
+}

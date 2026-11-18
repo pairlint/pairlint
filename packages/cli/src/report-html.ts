@@ -51,13 +51,26 @@ export function formatHtml(report: CheckReport, options: HtmlOptions): string {
 
   let rowsLeft = HTML_ROW_LIMIT;
   const sections = report.modes.map((mode) => {
-    const inMode = results.filter((result) => result.status !== "exempt" && result.mode === mode);
+    const inMode = results.filter(
+      (result) =>
+        result.status !== "exempt" && result.status !== "baselined" && result.mode === mode,
+    );
     const exempt = results.filter((result) => result.status === "exempt" && result.mode === mode);
+    const baselined = results.filter(
+      (result) => result.status === "baselined" && result.mode === mode,
+    );
     const problems = inMode.filter((result) => result.status !== "pass");
     const passes = inMode.filter((result) => result.status === "pass");
     const shownPasses = passes.slice(0, Math.max(0, rowsLeft - problems.length));
     rowsLeft -= problems.length + shownPasses.length;
-    return modeSection(mode, problems, shownPasses, passes.length - shownPasses.length, exempt);
+    return modeSection(
+      mode,
+      problems,
+      shownPasses,
+      passes.length - shownPasses.length,
+      exempt,
+      baselined,
+    );
   });
 
   const headline =
@@ -100,7 +113,7 @@ export function formatHtml(report: CheckReport, options: HtmlOptions): string {
 <header>
 <h1>Contrast report</h1>
 <p class="headline">${escapeHtml(headline)}</p>
-<p class="meta">${count("fail")} failed, ${count("pass")} passed, ${count("exempt")} exempt, ${errors} could not be checked. WCAG ${report.level}, ${plural(report.modes.length, "mode", "modes")}.</p>
+<p class="meta">${count("fail")} failed, ${count("pass")} passed, ${count("exempt")} exempt, ${count("baselined")} baselined, ${errors} could not be checked. WCAG ${report.level}, ${plural(report.modes.length, "mode", "modes")}.</p>
 <p class="note">Passing means these token pairs meet WCAG 2.2 contrast ratios. It is not a full accessibility audit.</p>
 </header>
 ${sections.join("\n")}
@@ -117,10 +130,16 @@ function modeSection(
   passes: PairResult[],
   hiddenPasses: number,
   exempt: PairResult[],
+  baselined: PairResult[],
 ): string {
   const id = `mode-${slug(mode)}`;
   const parts = [`<section aria-labelledby="${id}"><h2 id="${id}">${escapeHtml(mode)}</h2>`];
-  if (problems.length === 0 && passes.length === 0 && exempt.length === 0) {
+  if (
+    problems.length === 0 &&
+    passes.length === 0 &&
+    exempt.length === 0 &&
+    baselined.length === 0
+  ) {
     parts.push(`<p class="muted">No pairs apply to this mode.</p>`);
   }
   if (problems.length > 0) parts.push(table(`Problems in ${mode}`, problems));
@@ -132,6 +151,11 @@ function modeSection(
           ? `<p class="muted">${hiddenPasses} more not shown. Use the JSON report for everything.</p>`
           : ""
       }</details>`,
+    );
+  }
+  if (baselined.length > 0) {
+    parts.push(
+      `<details><summary>${plural(baselined.length, "baselined pair", "baselined pairs")}</summary>${table(`Baselined pairs in ${mode}`, baselined)}</details>`,
     );
   }
   if (exempt.length > 0) {
@@ -162,13 +186,22 @@ function row(result: PairResult): string {
   if (result.status === "error") {
     return `<tr><td></td><td>${pair}</td><td></td><td><span class="badge fail">Cannot check</span><div class="detail">${escapeHtml(result.message ?? "unknown problem")}</div></td><td></td></tr>`;
   }
-  const status = result.status === "pass" ? "pass" : "fail";
-  const label = status === "pass" ? "Passes" : "Fails";
+  const status =
+    result.status === "pass" ? "pass" : result.status === "baselined" ? "baselined" : "fail";
+  const label = { pass: "Passes", fail: "Fails", baselined: "Baselined" }[status];
+  let baseline = "";
+  if (result.baseline) {
+    const expires = result.baseline.expires ? escapeHtml(result.baseline.expires) : undefined;
+    const when = result.baselineExpired
+      ? `Baseline expired on ${expires}`
+      : `Baselined${expires ? ` until ${expires}` : ""}`;
+    baseline = `<div class="detail">${when}, owner ${escapeHtml(result.baseline.owner)}: ${escapeHtml(result.baseline.reason)}</div>`;
+  }
   return `<tr><td>${sample(result.fgColor, result.bgColor)}</td><td>${pair}</td><td><span class="ratio">${escapeHtml(
     formatRatio(result.ratio ?? 0, result.required),
   )}:1</span><div class="detail">${escapeHtml(result.fgColor ?? "")} on ${escapeHtml(result.bgColor ?? "")}</div></td><td><span class="badge ${status}">${label}</span><div class="detail">needs ${escapeHtml(
     requirementText(result),
-  )}</div></td><td>${result.suggestion ? suggestion(result, result.suggestion) : ""}</td></tr>`;
+  )}</div>${baseline}</td><td>${result.suggestion ? suggestion(result, result.suggestion) : ""}</td></tr>`;
 }
 
 function suggestion(result: PairResult, fix: Suggestion): string {
@@ -224,7 +257,7 @@ function styles(): string {
     ".fix{display:flex;gap:.75rem;align-items:flex-start}",
     ".ratio{font-size:1.125rem;font-weight:600;font-variant-numeric:tabular-nums}",
     ".badge{display:inline-block;padding:.125rem .5rem;border-radius:1rem;font-size:.875rem;font-weight:600}",
-    ".badge.fail{background:var(--failBg);color:var(--failText)}.badge.pass{background:var(--passBg);color:var(--passText)}",
+    ".badge.fail{background:var(--failBg);color:var(--failText)}.badge.pass{background:var(--passBg);color:var(--passText)}.badge.baselined{background:var(--exemptBg);color:var(--exemptText)}",
     ".all-pass{background:var(--passBg);color:var(--passText);padding:.75rem 1rem;border-radius:.5rem}",
     ".exempt li{background:var(--exemptBg);color:var(--exemptText);padding:.25rem .5rem;margin:.25rem 0;border-radius:.25rem;list-style:none}",
     "details{margin-top:1rem}summary{cursor:pointer;font-weight:600}",

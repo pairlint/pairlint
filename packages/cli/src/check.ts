@@ -28,7 +28,8 @@ import type { ReadFile } from "./files.js";
 
 export const MAX_CHECKS = 1_000_000;
 
-export type PairStatus = "pass" | "fail" | "exempt" | "error";
+/** "baselined" is a failure accepted for now by an entry in the baseline file. */
+export type PairStatus = "pass" | "fail" | "exempt" | "baselined" | "error";
 
 export interface PairResult {
   mode: string;
@@ -50,6 +51,10 @@ export interface PairResult {
   bgLocation?: SourceLocation;
   /** For failing pairs, the smallest change that would make the pair pass, when one exists. */
   suggestion?: Suggestion;
+  /** The baseline entry that covers this pair, when there is one. */
+  baseline?: { reason: string; owner: string; expires?: string };
+  /** True when the baseline entry has expired, so the pair fails again. */
+  baselineExpired?: boolean;
 }
 
 /**
@@ -87,7 +92,13 @@ export interface CheckOptions {
   modes?: string[];
 }
 
-const STATUS_ORDER: Record<PairStatus, number> = { error: 0, fail: 1, pass: 2, exempt: 3 };
+const STATUS_ORDER: Record<PairStatus, number> = {
+  error: 0,
+  fail: 1,
+  baselined: 2,
+  pass: 3,
+  exempt: 4,
+};
 
 export function runCheck(
   config: Config,

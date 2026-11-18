@@ -46,6 +46,10 @@ export function formatText(report: CheckReport, options: TextOptions): string {
       if (exempt > 0) {
         lines.push(`  ${paint.dim(`– ${exempt} exempt`)}`);
       }
+      const baselined = inMode.filter((result) => result.status === "baselined").length;
+      if (baselined > 0) {
+        lines.push(`  ${paint.dim(`– ${baselined} baselined`)}`);
+      }
     }
     lines.push("");
   }
@@ -71,6 +75,11 @@ function problemLines(result: PairResult, paint: Painter): string[] {
     lines.push(`    ${ratioText(result)}, needs ${requirementText(result)}`);
     if (result.suggestion)
       lines.push(`    ${paint.cyan("Try:")} ${suggestionText(result.suggestion)}`);
+    if (result.baselineExpired && result.baseline) {
+      lines.push(
+        `    ${paint.yellow("Baseline entry expired")} on ${result.baseline.expires} (owner ${result.baseline.owner}: ${result.baseline.reason})`,
+      );
+    }
   }
   const location = result.fgLocation ?? result.bgLocation;
   if (location) lines.push(`    ${paint.dim(formatLocation(location))}`);
@@ -81,6 +90,12 @@ function detailLines(result: PairResult, paint: Painter): string[] {
   if (result.status === "exempt") {
     return [
       `  ${paint.dim(`– ${pairName(result)} (exempt: ${result.reason ?? "no reason given"})`)}`,
+    ];
+  }
+  if (result.status === "baselined" && result.baseline) {
+    const until = result.baseline.expires ? ` until ${result.baseline.expires}` : "";
+    return [
+      `  ${paint.dim(`– ${pairName(result)}  ${ratioText(result)}, baselined${until}, owner ${result.baseline.owner}: ${result.baseline.reason}`)}`,
     ];
   }
   return [`  ${paint.green("✓")} ${pairName(result)}  ${paint.dim(ratioText(result))}`];
@@ -125,6 +140,8 @@ function summary(report: CheckReport, paint: Painter): string {
   parts.push(`${count("pass")} passed`);
   const exempt = count("exempt");
   if (exempt > 0) parts.push(`${exempt} exempt`);
+  const baselined = count("baselined");
+  if (baselined > 0) parts.push(`${baselined} baselined`);
   const modes = report.modes.length;
   return `${parts.join(", ")} across ${modes} ${modes === 1 ? "mode" : "modes"} (WCAG ${report.level})`;
 }
