@@ -1,5 +1,6 @@
 // Fails the build if published code could reach the network, run other programs or evaluate
 // strings as code, or if any package declares install scripts. These are promises in SECURITY.md.
+// The Figma plugin's bundle, including the script inlined in its panel, is checked the same way.
 import { readdirSync, readFileSync, statSync } from "node:fs";
 import { join } from "node:path";
 
@@ -36,7 +37,7 @@ for (const name of readdirSync("packages")) {
   const dist = join(dir, "dist");
   let files;
   try {
-    files = walk(dist).filter((file) => file.endsWith(".js"));
+    files = walk(dist).filter((file) => file.endsWith(".js") || file.endsWith(".html"));
   } catch {
     problems.push(`${dist} is missing. Run npm run build first.`);
     continue;

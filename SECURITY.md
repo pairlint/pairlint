@@ -32,3 +32,7 @@ npm audit signatures
 Each GitHub release also lists a CycloneDX SBOM for every package, written by `npm sbom` from the lockfile the release was built with. The packages have no runtime dependencies, so each SBOM lists only pairlint's own packages.
 
 [OpenSSF Scorecard](https://scorecard.dev/viewer/?uri=github.com/pairlint/pairlint) checks this repository's practices every week: pinned actions, token permissions, branch protection and more.
+
+## Figma plugin
+
+The Figma plugin's manifest sets `networkAccess` to `none`, so Figma blocks it from reaching any server, and its panel's content security policy blocks loading anything from outside. It only reads variables. CI runs the same network, process and `eval` checks on the plugin's bundle as on the npm packages.

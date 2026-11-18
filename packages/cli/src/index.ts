@@ -48,14 +48,15 @@ export { InputError } from "./errors.js";
 export { createFileReader, MAX_FILE_BYTES, type ReadFile } from "./files.js";
 export {
   type FoundSource,
-  findTokenFiles,
   type InferredConfig,
   type InferredPair,
   inferConfig,
+  inferPairs,
   renderConfig,
   roleOf,
   themeOf,
-} from "./init.js";
+} from "./infer.js";
+export { findTokenFiles } from "./init.js";
 export { formatExplainText } from "./report-explain.js";
 export { escapeData, escapeProperty, formatGithub, type GithubOptions } from "./report-github.js";
 export { formatHtml, HTML_PALETTE, HTML_ROW_LIMIT, type HtmlOptions } from "./report-html.js";

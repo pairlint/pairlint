@@ -351,13 +351,18 @@ Pin the action to a release, or to its commit SHA for the strictest setup. The a
 
 Not on GitHub? Any CI can run `npx --yes pairlint@0.1.0 --format markdown` or `--format sarif`.
 
+## Figma
+
+[pairlint for Figma](packages/figma-plugin) checks your color variables in every mode inside Figma, with the same code the command line runs. It then saves `figma-variables.json` and a matching `pairlint.config.json`, so CI checks exactly what designers saw. The plugin has no network access and never changes your file.
+
+You can also export variables yourself: any DTCG file works, and `figma-variables.json#Semantic/Dark` style entries pick one collection and mode.
+
 ## What pairlint does not do
 
 - **It is not a conformance claim.** Passing means your token pairs meet the WCAG 2.2 contrast ratios. A site also needs those tokens used in the right places, and much more.
 - **It cannot check gradients or images.** Only flat colors and translucent layers.
 - **It does not use APCA.** WCAG 3 has not settled on a contrast method. An informational APCA column may come later, but it will never fail a build on its own.
 - **It does not read computed values in CSS.** `calc()`, `color-mix()`, `light-dark()` and relative colors are reported as values pairlint cannot parse, with the file and line.
-- **Not yet:** a Figma plugin. See the [roadmap](https://github.com/pairlint/pairlint/issues).
 
 ## Security
 
@@ -370,6 +375,7 @@ pairlint reads files and prints a report. It has no runtime dependencies, makes 
 | [`pairlint`](packages/cli)                      | The command-line tool                                      |
 | [`@pairlint/contrast`](packages/contrast)       | WCAG contrast math, color parsing and gamut mapping        |
 | [`@pairlint/tokens-core`](packages/tokens-core) | Token file reader with aliases, modes and source positions |
+| [pairlint for Figma](packages/figma-plugin)     | Figma plugin: check color variables and export them for CI |
 
 ## Contributing
 

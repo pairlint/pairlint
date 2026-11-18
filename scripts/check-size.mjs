@@ -13,8 +13,9 @@ if (!npmCli) {
 const output = execFileSync(process.execPath, [npmCli, ...args], { encoding: "utf8" });
 const packages = JSON.parse(output);
 
+// The Figma plugin is private: it ships to the Figma Community, not npm, so it is not counted.
 let total = 0;
-for (const pkg of packages) {
+for (const pkg of packages.filter((p) => !p.name.startsWith("@pairlint/figma-plugin"))) {
   total += pkg.unpackedSize;
   console.log(
     `${pkg.name.padEnd(24)} ${String(pkg.unpackedSize).padStart(8)} bytes, ${pkg.entryCount} files`,
