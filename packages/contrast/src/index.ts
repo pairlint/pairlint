@@ -1,3 +1,4 @@
+export { adjustLightness, type LightnessFix, oklabLightness } from "./adjust.js";
 export { ColorParseError, type ParsedColor, type Rgba, toHex } from "./color.js";
 export {
   gammaToLinear,

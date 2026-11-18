@@ -1,9 +1,11 @@
 import {
+  adjustLightness,
   ColorParseError,
   type ContrastUse,
   compositeOver,
   contrastRatio,
   meetsRatio,
+  oklabLightness,
   type ParsedColor,
   parseColor,
   type Rgba,
@@ -46,7 +48,17 @@ export interface PairResult {
   message?: string;
   fgLocation?: SourceLocation;
   bgLocation?: SourceLocation;
+  /** For failing pairs, the smallest change that would make the pair pass, when one exists. */
+  suggestion?: Suggestion;
 }
+
+/**
+ * A way to fix a failing pair. "token" points the token at another shade from the same scale,
+ * which keeps the design system intact. "color" is a new value with the lightness adjusted.
+ */
+export type Suggestion =
+  | { kind: "token"; side: "fg" | "bg"; token: string; value: string; ratio: number }
+  | { kind: "color"; side: "fg"; token: string; value: string; oklch: string; ratio: number };
 
 export interface Warning {
   mode: string;
@@ -97,6 +109,62 @@ export function runCheck(
   }
 
   return { level, modes: modes.map((mode) => mode.name), results, warnings };
+}
+
+export interface SideDetail {
+  token: string;
+  /** Alias chain from the token to its final value. */
+  chain: readonly string[];
+  /** The token's own color as hex, before blending. */
+  color?: string;
+  location?: SourceLocation;
+  error?: string;
+}
+
+export interface Explanation {
+  mode: string;
+  /** False when no pair in the config covers these tokens, so they were checked as body text. */
+  inPairs: boolean;
+  result: PairResult;
+  fg: SideDetail;
+  bg: SideDetail;
+  /** The base color translucent backgrounds sit on in this mode. */
+  base?: string;
+}
+
+/** Checks one pair in each mode and returns everything that went into the result. */
+export function explainPair(
+  config: Config,
+  readFile: ReadFile,
+  fg: string,
+  bg: string,
+  options: CheckOptions = {},
+): Explanation[] {
+  const level = options.level ?? config.level;
+  const modes = options.modes
+    ? config.modes.filter((mode) => options.modes?.includes(mode.name))
+    : config.modes;
+
+  return modes.map((mode) => {
+    const checker = new ModeChecker(mode, loadTokens(mode, config, readFile), level, []);
+    const rule = checker.ruleFor(fg, bg, config.pairs);
+    const effective: PairRule = rule ?? {
+      fg: [fg],
+      bg: [bg],
+      use: "body",
+      location: { file: config.file, line: 1, column: 1 },
+    };
+    const explanation: Explanation = {
+      mode: mode.name,
+      inPairs: rule !== undefined,
+      result: checker.check(fg, bg, effective),
+      fg: checker.describe(fg),
+      bg: checker.describe(bg),
+    };
+    const base = checker.baseHex();
+    if (base) explanation.base = base;
+    return explanation;
+  });
 }
 
 function loadTokens(mode: ModeConfig, config: Config, readFile: ReadFile): TokenSet {
@@ -212,7 +280,111 @@ class ModeChecker {
     result.fgColor = toHex(foreground);
     result.bgColor = toHex(background);
     result.status = meetsRatio(ratio, required) ? "pass" : "fail";
+    if (result.status === "fail") {
+      const suggestion = this.suggest(
+        fg,
+        bg,
+        fgColor.color.rgba,
+        bgColor.color.rgba,
+        base,
+        required,
+      );
+      if (suggestion) result.suggestion = suggestion;
+    }
     return result;
+  }
+
+  describe(id: string): SideDetail {
+    const resolution = this.tokens.resolve(id);
+    const detail: SideDetail = { token: id, chain: resolution.chain };
+    const lookup = this.lookup(id);
+    if (lookup.location) detail.location = lookup.location;
+    if (lookup.ok) detail.color = toHex(lookup.color.rgba);
+    else detail.error = lookup.error;
+    return detail;
+  }
+
+  /** The finished base color for translucent backgrounds, or undefined when it is invalid. */
+  baseHex(): string | undefined {
+    try {
+      return toHex(this.baseColor());
+    } catch (error) {
+      if (error instanceof InputError) return undefined;
+      throw error;
+    }
+  }
+
+  /** Finds the rule that covers this pair, the same way a full check would. */
+  ruleFor(fg: string, bg: string, rules: readonly PairRule[]): PairRule | undefined {
+    for (const [f, b, rule] of this.expandPairs(rules)) {
+      if (f === fg && b === bg) return rule;
+    }
+    return undefined;
+  }
+
+  private suggest(
+    fg: string,
+    bg: string,
+    fgRgba: Rgba,
+    bgRgba: Rgba,
+    base: Rgba,
+    required: number,
+  ): Suggestion | undefined {
+    const background = compositeOver(bgRgba, base);
+    const fromFgScale = this.nearestInScale(fg, "fg", required, (candidate) =>
+      contrastRatio(compositeOver(candidate, background), background),
+    );
+    if (fromFgScale) return fromFgScale;
+
+    const fromBgScale = this.nearestInScale(bg, "bg", required, (candidate) => {
+      const next = compositeOver(candidate, base);
+      return contrastRatio(compositeOver(fgRgba, next), next);
+    });
+    if (fromBgScale) return fromBgScale;
+
+    const fix = adjustLightness(fgRgba, background, required);
+    if (!fix) return undefined;
+    return {
+      kind: "color",
+      side: "fg",
+      token: fg,
+      value: fix.hex,
+      oklch: fix.oklch,
+      ratio: fix.ratio,
+    };
+  }
+
+  /**
+   * When a token is an alias into a scale, like {color.gray.500}, looks for the passing sibling
+   * (color.gray.*) closest in lightness to the current one.
+   */
+  private nearestInScale(
+    id: string,
+    side: "fg" | "bg",
+    required: number,
+    ratioOf: (candidate: Rgba) => number,
+  ): Suggestion | undefined {
+    const resolution = this.tokens.resolve(id);
+    if (!resolution.ok || resolution.chain.length < 2) return undefined;
+    const target = resolution.chain[resolution.chain.length - 1] as string;
+    const scale = target.slice(0, target.lastIndexOf("."));
+    if (scale === "" || !target.includes(".")) return undefined;
+    const current = this.lookup(target);
+    if (!current.ok) return undefined;
+    const currentLightness = oklabLightness(current.color.rgba);
+
+    let best: { id: string; ratio: number; distance: number } | undefined;
+    for (const candidate of this.tokens.match(`${scale}.*`)) {
+      if (candidate === target) continue;
+      const lookup = this.lookup(candidate);
+      if (!lookup.ok) continue;
+      const ratio = ratioOf(lookup.color.rgba);
+      if (ratio < required) continue;
+      const distance = Math.abs(oklabLightness(lookup.color.rgba) - currentLightness);
+      if (!best || distance < best.distance) best = { id: candidate, ratio, distance };
+    }
+    if (!best) return undefined;
+    return { kind: "token", side, token: id, value: `{${best.id}}`, ratio: best.ratio };
   }
 
   private matchColors(patterns: readonly string[], rule: PairRule, side: "fg" | "bg"): string[] {
@@ -317,7 +489,7 @@ function compareText(a: string, b: string): number {
   return a < b ? -1 : a > b ? 1 : 0;
 }
 
-export function exitCode(report: CheckReport): 0 | 1 | 2 {
+export function exitCode(report: { results: readonly PairResult[] }): 0 | 1 | 2 {
   if (report.results.some((result) => result.status === "error")) return 2;
   if (report.results.some((result) => result.status === "fail")) return 1;
   return 0;

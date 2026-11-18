@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+- Failing pairs now come with a fix suggestion: the nearest passing shade in the same scale, or a new value with only the OKLCH lightness changed.
+- New `pairlint explain <fg> <bg>` command shows alias chains, raw and blended colors, the base color and the suggestion for one pair in each mode.
+- `@pairlint/contrast` exports `adjustLightness` and `oklabLightness`.
+
 ## 0.1.0 (unreleased)
 
 First release.

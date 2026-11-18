@@ -365,7 +365,14 @@
       "criterion": "1.4.11",
       "criterionLevel": "AA",
       "fgColor": "#5f6368",
-      "bgColor": "#2e2e2e"
+      "bgColor": "#2e2e2e",
+      "suggestion": {
+        "kind": "token",
+        "side": "fg",
+        "token": "color.border.default",
+        "value": "{color.gray.500}",
+        "ratio": 3.663496229572287
+      }
     },
     {
       "mode": "dark",
@@ -388,7 +395,14 @@
       "criterion": "1.4.11",
       "criterionLevel": "AA",
       "fgColor": "#5f6368",
-      "bgColor": "#202124"
+      "bgColor": "#202124",
+      "suggestion": {
+        "kind": "token",
+        "side": "fg",
+        "token": "color.border.default",
+        "value": "{color.gray.500}",
+        "ratio": 4.370247207315039
+      }
     },
     {
       "mode": "dark",
@@ -411,7 +425,14 @@
       "criterion": "1.4.3",
       "criterionLevel": "AA",
       "fgColor": "#80868b",
-      "bgColor": "#2e2e2e"
+      "bgColor": "#2e2e2e",
+      "suggestion": {
+        "kind": "token",
+        "side": "fg",
+        "token": "color.text.secondary",
+        "value": "{color.gray.400}",
+        "ratio": 5.1108948094606035
+      }
     },
     {
       "mode": "dark",
@@ -434,7 +455,14 @@
       "criterion": "1.4.3",
       "criterionLevel": "AA",
       "fgColor": "#80868b",
-      "bgColor": "#202124"
+      "bgColor": "#202124",
+      "suggestion": {
+        "kind": "token",
+        "side": "fg",
+        "token": "color.text.secondary",
+        "value": "{color.gray.400}",
+        "ratio": 6.0968736879343925
+      }
     },
     {
       "mode": "dark",

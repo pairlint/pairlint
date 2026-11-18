@@ -1,5 +1,12 @@
 import { describe, expect, it } from "vitest";
-import { exitCode, InputError, type PairResult, parseConfig, runCheck } from "../src/index.js";
+import {
+  exitCode,
+  explainPair,
+  InputError,
+  type PairResult,
+  parseConfig,
+  runCheck,
+} from "../src/index.js";
 
 function check(tokens: Record<string, unknown>, config: Record<string, unknown>) {
   const files: Record<string, string> = { "tokens.json": JSON.stringify(tokens) };
@@ -120,5 +127,108 @@ describe("runCheck", () => {
         }),
       ),
     ).toThrow(InputError);
+  });
+});
+
+describe("fix suggestions", () => {
+  const gray = {
+    100: color("#f1f3f4"),
+    400: color("#9aa0a6"),
+    500: color("#80868b"),
+    600: color("#6c7177"),
+    800: color("#3c4043"),
+  };
+
+  it("points an alias at the nearest passing shade in the same scale", () => {
+    const report = check(
+      { gray, text: color("{gray.500}"), bg: color("#ffffff") },
+      { pairs: [{ fg: "text", bg: "bg" }] },
+    );
+    expect(report.results[0]?.suggestion).toMatchObject({
+      kind: "token",
+      side: "fg",
+      token: "text",
+      value: "{gray.600}",
+    });
+    expect(report.results[0]?.suggestion?.ratio).toBeGreaterThanOrEqual(4.5);
+  });
+
+  it("tries the background scale when no foreground shade passes", () => {
+    const report = check(
+      { gray, text: color("#808080"), surface: color("{gray.400}") },
+      { pairs: [{ fg: "text", bg: "surface", use: "large" }] },
+    );
+    expect(report.results[0]?.suggestion).toMatchObject({
+      kind: "token",
+      side: "bg",
+      token: "surface",
+      value: "{gray.100}",
+    });
+  });
+
+  it("adjusts lightness when the token is not an alias", () => {
+    const report = check(
+      { text: color("#9aa0a6"), bg: color("#ffffff") },
+      { pairs: [{ fg: "text", bg: "bg" }] },
+    );
+    const suggestion = report.results[0]?.suggestion;
+    expect(suggestion).toMatchObject({ kind: "color", side: "fg", token: "text" });
+    expect(suggestion?.value).toMatch(/^#[0-9a-f]{6}$/);
+    expect(suggestion?.ratio).toBeGreaterThanOrEqual(4.5);
+  });
+
+  it("only suggests for failing pairs", () => {
+    const report = check(
+      { text: color("#000000"), bg: color("#ffffff") },
+      { pairs: [{ fg: "text", bg: "bg" }] },
+    );
+    expect(report.results[0]?.suggestion).toBeUndefined();
+  });
+});
+
+describe("explainPair", () => {
+  const tokens = {
+    gray: { 50: color("#f8f9fa"), 500: color("#80868b"), 900: color("#202124") },
+    text: color("{gray.500}"),
+    bg: color("{gray.900}"),
+    scrim: color("rgb(255 255 255 / 10%)"),
+  };
+  const explain = (fg: string, bg: string, config: Record<string, unknown> = {}) => {
+    const parsed = parseConfig(
+      JSON.stringify({ tokens: ["tokens.json"], pairs: [{ fg: "text", bg: "bg" }], ...config }),
+      "pairlint.config.json",
+    );
+    return explainPair(
+      parsed,
+      () => ({ path: "tokens.json", text: JSON.stringify(tokens) }),
+      fg,
+      bg,
+    );
+  };
+
+  it("shows alias chains, colors, the base and the blended result", () => {
+    const [explanation] = explain("text", "scrim", { base: "{gray.900}" });
+    expect(explanation).toMatchObject({
+      mode: "default",
+      inPairs: false,
+      fg: { token: "text", chain: ["text", "gray.500"], color: "#80868b" },
+      bg: { token: "scrim", chain: ["scrim"], color: "#ffffff1a" },
+      base: "#202124",
+      result: { status: "fail", bgColor: "#36373a" },
+    });
+  });
+
+  it("uses the config rule when one covers the pair", () => {
+    const [explanation] = explain("text", "bg", {
+      pairs: [{ fg: "text", bg: "bg", use: "large" }],
+    });
+    expect(explanation?.inPairs).toBe(true);
+    expect(explanation?.result).toMatchObject({ use: "large", status: "pass", required: 3 });
+  });
+
+  it("reports tokens that do not exist", () => {
+    const [explanation] = explain("nope", "bg");
+    expect(explanation?.result.status).toBe("error");
+    expect(explanation?.fg.error).toBe('Token "nope" does not exist');
   });
 });
