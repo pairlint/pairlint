@@ -375,6 +375,28 @@ const INTENT_WORDS = [
 ];
 /** Interaction states. Hover text is checked on hover backgrounds, not on pressed ones. */
 const STATE_WORDS = ["rest", "hover", "hovered", "active", "pressed", "selected", "checked"];
+/** Words that describe a variant, never a component, when they follow the role word. */
+const VARIANT_WORDS = [
+  "primary",
+  "secondary",
+  "tertiary",
+  "default",
+  "base",
+  "subtle",
+  "muted",
+  "strong",
+  "weak",
+  "light",
+  "dark",
+  "color",
+  "colour",
+  "neutral",
+  "black",
+  "white",
+  "gray",
+  "grey",
+  "transparent",
+];
 /** Scope words for the page itself, the surface that component text falls back to. */
 const PAGE_WORDS = ["document", "page", "body", "canvas", "app", "site", "root"];
 
@@ -397,6 +419,8 @@ interface Classified {
    * "button.text" and "button.background", "" for "text-muted".
    */
   scope: string;
+  /** The words after the role word: "badge" and "accent" for "color.text.badge.accent". */
+  after: string[];
 }
 
 function classify(id: string): Classified {
@@ -406,7 +430,7 @@ function classify(id: string): Classified {
     const word = words[i] ?? "";
     base = (["fg", "bg", "ui"] as const).find((role) => ROLE_WORDS[role].includes(word));
   }
-  let scopeEnd = base === undefined ? -1 : scopeEndOf(words, base);
+  let [scopeEnd, roleEnd] = base === undefined ? [-1, -1] : roleRunOf(words, base);
   // Named after the CSS property, like "button.color" next to "button.background-color". A
   // shadow's or gradient's color is not text, though.
   if (
@@ -416,27 +440,88 @@ function classify(id: string): Classified {
   ) {
     base = "fg";
     scopeEnd = words.length - 1;
+    roleEnd = words.length - 1;
   }
   const scope = words.slice(0, Math.max(scopeEnd, 0)).join(".");
+  const after = roleEnd < 0 ? [] : words.slice(roleEnd + 1);
   // A disabled background is not text. It is left out instead of checked as a foreground.
-  if (words.includes("disabled")) return { role: base === "bg" ? undefined : "disabled", scope };
-  if (words.includes("on")) return { role: "on", scope };
-  return { role: base, scope };
+  if (words.includes("disabled")) {
+    return { role: base === "bg" ? undefined : "disabled", scope, after };
+  }
+  if (words.includes("on")) return { role: "on", scope, after };
+  return { role: base, scope, after };
 }
 
 /**
- * Where the scope ends: at the start of the last run of role words, so "label-red-fgColor" is in
- * "label.red" and "color.bg.canvas.default" in "color". "fill" is skipped, since in
- * "Bg.Danger.Fill Muted" it describes the background rather than starting it.
+ * The first and last index of the last run of role words. The scope ends where the run starts, so
+ * "label-red-fgColor" is in "label.red" and "color.bg.canvas.default" in "color". "fill" is
+ * skipped, since in "Bg.Danger.Fill Muted" it describes the background rather than starting it.
  */
-function scopeEndOf(words: string[], base: "fg" | "bg" | "ui"): number {
+function roleRunOf(words: string[], base: "fg" | "bg" | "ui"): [number, number] {
   const isRole = (word: string | undefined) =>
     word !== undefined && word !== "fill" && ROLE_WORDS[base].includes(word);
   let end = words.length - 1;
   while (end >= 0 && !isRole(words[end])) end--;
-  if (end < 0) return words.findIndex((word) => ROLE_WORDS[base].includes(word));
-  while (end > 0 && isRole(words[end - 1])) end--;
-  return end;
+  if (end < 0) {
+    const index = words.findIndex((word) => ROLE_WORDS[base].includes(word));
+    return [index, index];
+  }
+  let start = end;
+  while (start > 0 && isRole(words[start - 1])) start--;
+  // Only an intent, "neutral" or a state between two role words, like "accent" in "Bg.Accent.Canvas":
+  // still one run. A color name is not enough, since "label-gray-fgColor" is the gray label's text.
+  for (let i = start - 1; i >= 0; i--) {
+    const word = words[i] ?? "";
+    if (ROLE_WORDS[base].includes(word)) start = i;
+    else if (!INTENT_WORDS.includes(word) && !STATE_WORDS.includes(word) && word !== "neutral") {
+      break;
+    }
+  }
+  return [start, end];
+}
+
+/** Words that only qualify a role word: intents, states, variants and numbers. */
+function isModifier(word: string): boolean {
+  return (
+    /^\d+$/.test(word) ||
+    [INTENT_WORDS, STATE_WORDS, VARIANT_WORDS, FILL_WORDS].some((list) => list.includes(word))
+  );
+}
+
+/** A word after the role word that could name a component, like "badge" in "color.bg.badge.info". */
+function componentWord(classified: Classified): string | undefined {
+  const word = classified.after.find((w) => w !== "color" && w !== "colour");
+  return word === undefined || isModifier(word) ? undefined : word;
+}
+
+/**
+ * Component words that come after the role word on both sides, like "badge" in
+ * "color.text.badge.accent" and "color.bg.badge.accent". A word whose backgrounds have interaction
+ * states its text lacks is not one: "color.bg.action.primary.rest" is a button fill, while
+ * "color.text.action.primary" is plain action text that sits on the page.
+ */
+function sharedComponents(colors: string[], classified: ReadonlyMap<string, Classified>) {
+  const sides = new Map<
+    string,
+    { bg: boolean; fg: boolean; bgStates: boolean; fgStates: boolean }
+  >();
+  for (const id of colors) {
+    const entry = classified.get(id);
+    const word = entry ? componentWord(entry) : undefined;
+    if (!entry || word === undefined) continue;
+    const side =
+      entry.role === "bg" ? "bg" : entry.role === "fg" || entry.role === "ui" ? "fg" : "";
+    if (side === "") continue;
+    const sideInfo = sides.get(word) ?? { bg: false, fg: false, bgStates: false, fgStates: false };
+    sideInfo[side] = true;
+    if (wordsOf(id).some((w) => STATE_WORDS.includes(w))) sideInfo[`${side}States`] = true;
+    sides.set(word, sideInfo);
+  }
+  return new Set(
+    [...sides]
+      .filter(([, info]) => info.bg && info.fg && !(info.bgStates && !info.fgStates))
+      .map(([word]) => word),
+  );
 }
 
 /** What a token is for, from the words in its name. The word nearest the end wins. */
@@ -446,15 +531,32 @@ export function roleOf(id: string): Role | undefined {
 
 interface Facets {
   scope: string;
+  /** A component named after the role word, like "badge", when both text and backgrounds use it. */
+  component: string | undefined;
+  /** The words after the component, without states: "accent" for "color.text.badge.accent". */
+  variant: string;
   intent: string | undefined;
   state: string | undefined;
   inverse: boolean;
 }
 
-function facetsOf(id: string, scope: string): Facets {
+function facetsOf(id: string, classified: Classified, components: ReadonlySet<string>): Facets {
   const words = wordsOf(id);
+  const word = componentWord(classified);
+  const component = word !== undefined && components.has(word) ? word : undefined;
+  const variant = component
+    ? classified.after
+        .slice(classified.after.indexOf(component) + 1)
+        .filter((w) => !STATE_WORDS.includes(w))
+        .join(".")
+    : "";
+  const scope = component
+    ? [classified.scope, component].filter((part) => part !== "").join(".")
+    : classified.scope;
   return {
     scope,
+    component,
+    variant,
     intent: words.find((word) => INTENT_WORDS.includes(word)),
     state: words.find((word) => STATE_WORDS.includes(word)),
     inverse: words.includes("inverse") || words.includes("inverted"),
@@ -473,7 +575,7 @@ function compatible(fg: Facets, bg: Facets): boolean {
 interface PairInference {
   pairs: InferredPair[];
   guessed: boolean;
-  /** Text, borders, on- colors and fills that found nothing to pair with. */
+  /** Text, borders, on- colors, fills and backgrounds that found nothing to pair with. */
   unpaired: string[];
   /** Pairs checked in each mode, not counting exempt ones. */
   pairCount: number;
@@ -489,8 +591,9 @@ function inferPairs(colors: string[], others: ReadonlySet<string>): PairInferenc
   const classified = new Map(colors.map((id) => [id, classify(id)]));
   const roleOfId = (id: string) => classified.get(id)?.role;
   const ids = (role: Role) => colors.filter((id) => roleOfId(id) === role);
+  const components = sharedComponents(colors, classified);
   const facets = new Map(
-    colors.map((id) => [id, facetsOf(id, classified.get(id)?.scope ?? "")] as const),
+    colors.map((id) => [id, facetsOf(id, classified.get(id) as Classified, components)] as const),
   );
   const facet = (id: string) => facets.get(id) as Facets;
 
@@ -533,10 +636,16 @@ function inferPairs(colors: string[], others: ReadonlySet<string>): PairInferenc
         break;
       }
     }
-    return [...scopes]
+    const found = [...scopes]
       .flatMap((scope) => byScope.get(scope) ?? [])
       .filter((bg) => compatible(own, facet(bg)))
       .sort();
+    // Inside a component, matching variants pair one to one: decorative.1 text on decorative.1.
+    if (own.component !== undefined && own.variant !== "") {
+      const same = found.filter((bg) => facet(bg).variant === own.variant);
+      if (same.length > 0) return same;
+    }
+    return found;
   };
 
   const edges = (fgIds: string[], find: (id: string) => string[]) =>
@@ -561,9 +670,11 @@ function inferPairs(colors: string[], others: ReadonlySet<string>): PairInferenc
   ];
 
   const usedFills = new Set([...on.values()].flat());
+  const usedSurfaces = new Set([...text.values(), ...ui.values()].flat());
   const unpaired = [
     ...[...text, ...ui, ...on].filter(([, bgs]) => bgs.length === 0).map(([id]) => id),
     ...[...fillIds].filter((id) => !usedFills.has(id)),
+    ...surfaces.filter((id) => !usedSurfaces.has(id)),
   ].sort();
   let pairCount = 0;
   for (const map of [text, ui, on]) {

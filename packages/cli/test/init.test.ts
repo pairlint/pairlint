@@ -358,15 +358,80 @@ describe("inferConfig", () => {
       "bgColor-black",
       "label-red-fgColor",
       "label-red-bgColor",
+      "label-gray-fgColor",
+      "label-gray-bgColor",
       "page-header-fgColor",
       "page-header-bgColor",
     ];
     expect(checkedPairs(inferConfig([colors(ids)]).pairs, ids)).toEqual([
       "fgColor-default on bgColor-black",
       "fgColor-default on bgColor-default",
+      "label-gray-fgColor on label-gray-bgColor",
       "label-red-fgColor on label-red-bgColor",
       // "page" names the page only as the last word of a scope, not in page-header.
       "page-header-fgColor on page-header-bgColor",
+    ]);
+  });
+
+  it("keeps one scope when only modifiers sit between role words", () => {
+    const ids = [
+      "Text.Strong",
+      "Text.Accent.Strong",
+      "Bg.Canvas",
+      "Bg.Accent.Canvas",
+      "Bg.Neutral.Surface",
+    ];
+    expect(checkedPairs(inferConfig([colors(ids)]).pairs, ids)).toEqual([
+      "Text.Accent.Strong on Bg.Accent.Canvas",
+      "Text.Accent.Strong on Bg.Canvas",
+      "Text.Accent.Strong on Bg.Neutral.Surface",
+      "Text.Strong on Bg.Accent.Canvas",
+      "Text.Strong on Bg.Canvas",
+      "Text.Strong on Bg.Neutral.Surface",
+    ]);
+  });
+
+  it("reads a component named after the role word, pairing matching variants", () => {
+    const ids = [
+      "color.text.primary",
+      "color.text.badge.accent",
+      "color.text.decorative.1",
+      "color.text.decorative.2",
+      "color.bg.canvas.default",
+      "color.bg.badge.accent",
+      "color.bg.badge.default",
+      "color.bg.decorative.1",
+      "color.bg.decorative.2",
+    ];
+    const config = inferConfig([colors(ids)]);
+    expect(checkedPairs(config.pairs, ids)).toEqual([
+      "color.text.badge.accent on color.bg.badge.accent",
+      "color.text.decorative.1 on color.bg.decorative.1",
+      "color.text.decorative.2 on color.bg.decorative.2",
+      "color.text.primary on color.bg.canvas.default",
+    ]);
+    // Nothing is meant for the default badge, so it is listed instead of dropped quietly.
+    expect(config.unpaired).toEqual(["color.bg.badge.default"]);
+  });
+
+  it("does not treat stateful fills as a component of plain text", () => {
+    const ids = [
+      "color.text.action.primary",
+      "color.bg.canvas.default",
+      "color.bg.action.primary.rest",
+      "color.bg.action.primary.hovered",
+    ];
+    const pairs = checkedPairs(inferConfig([colors(ids)]).pairs, ids);
+    expect(pairs).toContain("color.text.action.primary on color.bg.canvas.default");
+  });
+
+  it("does not treat color names as components", () => {
+    const ids = ["fgColor-default", "fgColor-white", "bgColor-default", "bgColor-black"];
+    expect(checkedPairs(inferConfig([colors(ids)]).pairs, ids)).toEqual([
+      "fgColor-default on bgColor-black",
+      "fgColor-default on bgColor-default",
+      "fgColor-white on bgColor-black",
+      "fgColor-white on bgColor-default",
     ]);
   });
 
