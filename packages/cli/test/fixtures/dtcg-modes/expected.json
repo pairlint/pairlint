@@ -10,6 +10,7 @@
     "passed": 20,
     "failed": 4,
     "exempt": 6,
+    "baselined": 0,
     "errors": 0,
     "warnings": 1
   },

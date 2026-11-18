@@ -1,0 +1,18 @@
+{
+  // Light and dark themes share one core palette.
+  "modes": {
+    "light": ["tokens/core.json", "tokens/light.json"],
+    "dark": ["tokens/core.json", "tokens/dark.json"]
+  },
+  "base": { "light": "#ffffff", "dark": "{color.gray.950}" },
+  "pairs": [
+    { "fg": "color.text.*", "bg": "color.surface.*" },
+    { "fg": "color.border.*", "bg": "color.surface.*", "use": "ui" },
+    {
+      "fg": "color.text.disabled",
+      "bg": "color.surface.*",
+      "use": "exempt",
+      "reason": "Disabled controls are exempt from WCAG 1.4.3"
+    }
+  ]
+}

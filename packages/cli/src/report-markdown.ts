@@ -13,6 +13,7 @@ export function formatMarkdown(report: CheckReport): string {
   const errors = results.filter((result) => result.status === "error");
   const passed = results.filter((result) => result.status === "pass").length;
   const exempt = results.filter((result) => result.status === "exempt").length;
+  const baselined = results.filter((result) => result.status === "baselined").length;
   const lines: string[] = [];
 
   if (failures.length === 0 && errors.length === 0) {
@@ -27,6 +28,7 @@ export function formatMarkdown(report: CheckReport): string {
 
   const summary = [`${failures.length} failed`, `${passed} passed`];
   if (exempt > 0) summary.push(`${exempt} exempt`);
+  if (baselined > 0) summary.push(`${baselined} baselined`);
   if (errors.length > 0) summary.push(`${errors.length} could not be checked`);
   const modes = report.modes.length;
   lines.push(
@@ -90,11 +92,15 @@ function failureRow(result: PairResult): string {
       }`
     : "";
   const where = result.fgLocation ?? result.bgLocation;
+  const expired =
+    result.baselineExpired && result.baseline
+      ? ` (baseline expired ${result.baseline.expires})`
+      : "";
   return `| ${[
     escapeCell(result.mode),
     code(result.fg),
     code(result.bg),
-    `${formatRatio(result.ratio ?? 0, result.required)}:1`,
+    `${formatRatio(result.ratio ?? 0, result.required)}:1${expired}`,
     needs,
     fix,
     where ? code(formatLocation(where)) : "",

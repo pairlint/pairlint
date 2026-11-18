@@ -1,4 +1,17 @@
 export {
+  applyBaseline,
+  BASELINE_VERSION,
+  type Baseline,
+  type BaselineEntry,
+  type BaselineUpdate,
+  entryKey,
+  isoDate,
+  isValidDate,
+  parseBaseline,
+  serializeBaseline,
+  updateBaseline,
+} from "./baseline.js";
+export {
   type CheckOptions,
   type CheckReport,
   type Explanation,
@@ -17,6 +30,7 @@ export {
   CONFIG_FILE,
   type Config,
   DEFAULT_BASE,
+  DEFAULT_BASELINE,
   DEFAULT_MODE,
   type ModeConfig,
   type PairRule,

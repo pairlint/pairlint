@@ -157,7 +157,11 @@ function messageFor(result: PairResult): string {
   const pair = `${pairName(result)} (${result.mode})`;
   if (result.status === "error") return `${pair}: ${result.message ?? "could not be checked"}`;
   const suggestion = result.suggestion ? ` Try: ${suggestionText(result.suggestion)}.` : "";
-  return `${pair}: ${ratioText(result)}, needs ${requirementText(result)}.${suggestion}`;
+  const expired =
+    result.baselineExpired && result.baseline
+      ? ` Its baseline entry expired on ${result.baseline.expires}.`
+      : "";
+  return `${pair}: ${ratioText(result)}, needs ${requirementText(result)}.${suggestion}${expired}`;
 }
 
 function location(source: SourceLocation, options: SarifOptions) {

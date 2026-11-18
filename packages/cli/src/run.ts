@@ -1,11 +1,20 @@
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
-import { dirname, relative, resolve } from "node:path";
+import { dirname, isAbsolute, relative, resolve } from "node:path";
 import { parseArgs } from "node:util";
 import type { WcagLevel } from "@pairlint/contrast";
-import { exitCode, explainPair, runCheck } from "./check.js";
+import {
+  applyBaseline,
+  type Baseline,
+  isoDate,
+  isValidDate,
+  parseBaseline,
+  serializeBaseline,
+  updateBaseline,
+} from "./baseline.js";
+import { type CheckReport, exitCode, explainPair, runCheck } from "./check.js";
 import { CONFIG_FILE, parseConfig } from "./config.js";
 import { InputError } from "./errors.js";
-import { createFileReader, MAX_FILE_BYTES, toDisplayPath } from "./files.js";
+import { createFileReader, MAX_FILE_BYTES, type ReadFile, toDisplayPath } from "./files.js";
 import { formatExplainText } from "./report-explain.js";
 import { formatHtml } from "./report-html.js";
 import { formatExplainJson, formatJson } from "./report-json.js";
@@ -21,6 +30,8 @@ export interface RunContext {
   stderr: (text: string) => void;
   isTTY: boolean;
   version: string;
+  /** The current time. Defaults to now; tests pass a fixed date for baseline expiry. */
+  now?: Date;
 }
 
 export const ISSUES_URL = "https://github.com/pairlint/pairlint/issues";
@@ -28,6 +39,8 @@ export const ISSUES_URL = "https://github.com/pairlint/pairlint/issues";
 const HELP = `Usage
   pairlint [check] [options]       Check every pair in pairlint.config.json
   pairlint explain <fg> <bg>       Show how one pair's result was worked out
+  pairlint baseline --reason <text> --owner <name> [--expires <date>]
+                                   Accept today's failures and fail only on new ones
 
 Options
   -c, --config <path>   Config file (default: ./${CONFIG_FILE})
@@ -35,7 +48,8 @@ Options
   -o, --output <path>   Write the report to a file instead of the terminal
   -l, --level <level>   AA or AAA, overrides the config
   -m, --mode <name>     Check only this mode. Repeat for more than one
-      --verbose         List passing and exempt pairs too
+      --verbose         List passing, exempt and baselined pairs too
+      --ignore-baseline Report baselined failures as failures
       --color           Force colored output
       --no-color        Disable colored output
   -h, --help            Show this help
@@ -98,7 +112,7 @@ function runOrThrow(context: RunContext): number {
         'explain needs a foreground and a background token, like "pairlint explain color.text.muted color.surface.base"',
       );
     }
-  } else if (command !== "check" || positionals.length > 1) {
+  } else if ((command !== "check" && command !== "baseline") || positionals.length > 1) {
     throw new InputError(`Unknown command "${positionals.join(" ")}". Run "pairlint --help".`);
   }
 
@@ -110,6 +124,9 @@ function runOrThrow(context: RunContext): number {
   }
   if (command === "explain" && format !== "text" && format !== "json") {
     throw new InputError('explain supports "text" and "json" output only.');
+  }
+  if (command !== "baseline" && (values.reason ?? values.owner ?? values.expires) !== undefined) {
+    throw new InputError('--reason, --owner and --expires only work with "pairlint baseline".');
   }
   const write = (text: string) => {
     if (values.output === undefined) {
@@ -169,9 +186,17 @@ function runOrThrow(context: RunContext): number {
     return exitCode({ results: explanations.map((explanation) => explanation.result) });
   }
 
+  const configDir = dirname(configPath);
+  const today = isoDate(context.now ?? new Date());
+  const baselinePath = resolve(configDir, config.baseline);
+  const previous = existsSync(baselinePath) ? loadBaseline(readFile, config.baseline) : undefined;
   const report = runCheck(config, readFile, options);
 
-  const configDir = dirname(configPath);
+  if (command === "baseline") {
+    return writeBaseline(context, values, report, previous, configDir, config.baseline, today);
+  }
+  if (previous && values["ignore-baseline"] !== true) applyBaseline(report, previous, today);
+
   const toUri = (file: string) => toDisplayPath(relative(context.cwd, resolve(configDir, file)));
   switch (format) {
     case "json":
@@ -198,6 +223,66 @@ function runOrThrow(context: RunContext): number {
   return exitCode(report);
 }
 
+function loadBaseline(readFile: ReadFile, path: string): Baseline {
+  const file = readFile(path);
+  return parseBaseline(file.text, file.path);
+}
+
+function writeBaseline(
+  context: RunContext,
+  values: { reason?: string | undefined; owner?: string | undefined; expires?: string | undefined },
+  report: CheckReport,
+  previous: Baseline | undefined,
+  configDir: string,
+  path: string,
+  today: string,
+): number {
+  const reason = values.reason?.trim();
+  const owner = values.owner?.trim();
+  if (!reason || !owner) {
+    throw new InputError(
+      'pairlint baseline needs --reason and --owner for new entries, like: pairlint baseline --reason "Redesign of the gray scale is planned for Q1" --owner @design-systems',
+    );
+  }
+  if (values.expires !== undefined && !isValidDate(values.expires)) {
+    throw new InputError(`--expires must be a date like 2027-03-31, not "${values.expires}"`);
+  }
+  const errors = report.results.filter((result) => result.status === "error").length;
+  if (errors > 0) {
+    throw new InputError(
+      `${errors} ${errors === 1 ? "pair" : "pairs"} could not be checked. Fix those first; run "pairlint" to see them.`,
+    );
+  }
+
+  const defaults =
+    values.expires === undefined ? { reason, owner } : { reason, owner, expires: values.expires };
+  const update = updateBaseline(report, previous, defaults, today);
+  if (update.entries.length === 0 && previous === undefined) {
+    context.stdout("Nothing to baseline: every pair passes.\n");
+    return 0;
+  }
+
+  const target = resolve(configDir, path);
+  const rel = relative(configDir, target);
+  if (rel.startsWith("..") || isAbsolute(rel)) {
+    throw new InputError(`The baseline file must be inside the project folder, not ${path}`);
+  }
+  try {
+    writeFileSync(target, serializeBaseline(update.entries), "utf8");
+  } catch (error) {
+    throw new InputError(`Cannot write ${path}: ${(error as Error).message}`);
+  }
+  context.stdout(
+    `Wrote ${toDisplayPath(path)}: ${update.added} added, ${update.kept} kept, ${update.removed} removed.\n`,
+  );
+  if (update.expired > 0) {
+    context.stdout(
+      `${update.expired} kept ${update.expired === 1 ? "entry has" : "entries have"} expired and will fail. Fix ${update.expired === 1 ? "that pair" : "those pairs"} or give ${update.expired === 1 ? "it" : "them"} a new date.\n`,
+    );
+  }
+  return 0;
+}
+
 const FORMATS = ["text", "json", "sarif", "markdown", "html"] as const;
 type Format = (typeof FORMATS)[number];
 
@@ -220,6 +305,10 @@ function parseCliArgs(argv: readonly string[]) {
       level: { type: "string", short: "l" },
       mode: { type: "string", short: "m", multiple: true },
       verbose: { type: "boolean" },
+      "ignore-baseline": { type: "boolean" },
+      reason: { type: "string" },
+      owner: { type: "string" },
+      expires: { type: "string" },
       color: { type: "boolean" },
       help: { type: "boolean", short: "h" },
       version: { type: "boolean", short: "v" },

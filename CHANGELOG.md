@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Baselines: `pairlint baseline --reason <text> --owner <name> [--expires <date>]` records today's failures in `pairlint.baseline.json` so only new failures break the build. Entries need a reason and an owner, can expire, and pairlint warns when one is no longer needed. `--ignore-baseline` shows everything. New `baseline` config setting and `baselined` result status.
 - New report formats: `sarif` for GitHub code scanning, `markdown` for pull request comments and job summaries, and `html`, a self-contained page for designers with color samples and fix previews.
 - New `--output <path>` option writes the report to a file.
 - Token suggestions in the JSON report include the suggested shade's `color`.

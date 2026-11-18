@@ -1,0 +1,47 @@
+{
+  "version": 1,
+  "entries": [
+    {
+      "mode": "dark",
+      "fg": "color.border.default",
+      "bg": "color.surface.overlay",
+      "use": "ui",
+      "reason": "Border scale is being redrawn",
+      "owner": "@design-systems",
+      "expires": "2026-12-31"
+    },
+    {
+      "mode": "dark",
+      "fg": "color.border.default",
+      "bg": "color.surface.raised",
+      "use": "ui",
+      "reason": "Border scale is being redrawn",
+      "owner": "@design-systems"
+    },
+    {
+      "mode": "dark",
+      "fg": "color.text.secondary",
+      "bg": "color.surface.raised",
+      "use": "body",
+      "reason": "Waiting on the new gray ramp",
+      "owner": "@ashley",
+      "expires": "2026-05-01"
+    },
+    {
+      "mode": "dark",
+      "fg": "color.text.primary",
+      "bg": "color.surface.base",
+      "use": "body",
+      "reason": "Fixed already, entry left behind",
+      "owner": "@ashley"
+    },
+    {
+      "mode": "light",
+      "fg": "color.text.removed",
+      "bg": "color.surface.base",
+      "use": "body",
+      "reason": "Token was deleted",
+      "owner": "@ashley"
+    }
+  ]
+}

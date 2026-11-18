@@ -16,6 +16,7 @@ import { closest } from "./suggest.js";
 export const CONFIG_FILE = "pairlint.config.json";
 export const DEFAULT_MODE = "default";
 export const DEFAULT_BASE = "#ffffff";
+export const DEFAULT_BASELINE = "pairlint.baseline.json";
 
 export type PairUse = ContrastUse | "exempt";
 
@@ -47,9 +48,20 @@ export interface Config {
   format: TokenFormat | "auto";
   modes: ModeConfig[];
   pairs: PairRule[];
+  /** Baseline file, relative to the config. */
+  baseline: string;
 }
 
-const TOP_LEVEL_KEYS = ["$schema", "level", "format", "tokens", "modes", "base", "pairs"];
+const TOP_LEVEL_KEYS = [
+  "$schema",
+  "level",
+  "format",
+  "tokens",
+  "modes",
+  "base",
+  "pairs",
+  "baseline",
+];
 const PAIR_KEYS = ["fg", "bg", "use", "min", "reason", "modes"];
 const USES: readonly PairUse[] = ["body", "large", "ui", "exempt"];
 const LEVELS: readonly WcagLevel[] = ["AA", "AAA"];
@@ -97,7 +109,15 @@ class ConfigReader {
     const modeNames = modes.map((mode) => mode.name);
     const pairs = root.pairs.map((pair, index) => this.readPair(pair, index, modeNames));
 
-    return { file: this.file, level, format, modes, pairs };
+    let baseline = DEFAULT_BASELINE;
+    if (root.baseline !== undefined) {
+      if (typeof root.baseline !== "string" || root.baseline.trim() === "") {
+        this.fail(["baseline"], '"baseline" must be a file path, like "pairlint.baseline.json"');
+      }
+      baseline = root.baseline;
+    }
+
+    return { file: this.file, level, format, modes, pairs, baseline };
   }
 
   private readModes(root: Record<string, unknown>): ModeConfig[] {

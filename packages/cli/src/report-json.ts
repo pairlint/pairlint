@@ -14,6 +14,7 @@ export function formatJson(report: CheckReport): string {
       passed: count("pass"),
       failed: count("fail"),
       exempt: count("exempt"),
+      baselined: count("baselined"),
       errors: count("error"),
       warnings: report.warnings.length,
     },

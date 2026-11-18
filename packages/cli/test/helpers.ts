@@ -4,6 +4,9 @@ import { run } from "../src/index.js";
 export const fixture = (name: string) =>
   fileURLToPath(new URL(`./fixtures/${name}`, import.meta.url));
 
+/** A fixed "today" so baseline expiry tests do not depend on the real date. */
+export const TEST_NOW = new Date("2026-06-01T12:00:00Z");
+
 export interface CliResult {
   code: number;
   stdout: string;
@@ -12,7 +15,7 @@ export interface CliResult {
 
 export function runCli(
   argv: string[],
-  options: { cwd: string; env?: Record<string, string>; isTTY?: boolean },
+  options: { cwd: string; env?: Record<string, string>; isTTY?: boolean; now?: Date },
 ): CliResult {
   let stdout = "";
   let stderr = "";
@@ -28,6 +31,7 @@ export function runCli(
     },
     isTTY: options.isTTY ?? false,
     version: "0.0.0-test",
+    now: options.now ?? TEST_NOW,
   });
   return { code, stdout, stderr };
 }

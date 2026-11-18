@@ -21,7 +21,7 @@ th{font-size:.875rem}
 .fix{display:flex;gap:.75rem;align-items:flex-start}
 .ratio{font-size:1.125rem;font-weight:600;font-variant-numeric:tabular-nums}
 .badge{display:inline-block;padding:.125rem .5rem;border-radius:1rem;font-size:.875rem;font-weight:600}
-.badge.fail{background:var(--failBg);color:var(--failText)}.badge.pass{background:var(--passBg);color:var(--passText)}
+.badge.fail{background:var(--failBg);color:var(--failText)}.badge.pass{background:var(--passBg);color:var(--passText)}.badge.baselined{background:var(--exemptBg);color:var(--exemptText)}
 .all-pass{background:var(--passBg);color:var(--passText);padding:.75rem 1rem;border-radius:.5rem}
 .exempt li{background:var(--exemptBg);color:var(--exemptText);padding:.25rem .5rem;margin:.25rem 0;border-radius:.25rem;list-style:none}
 details{margin-top:1rem}summary{cursor:pointer;font-weight:600}
@@ -33,7 +33,7 @@ summary:focus-visible,a:focus-visible{outline:3px solid var(--text);outline-offs
 <header>
 <h1>Contrast report</h1>
 <p class="headline">4 pairs fail</p>
-<p class="meta">4 failed, 20 passed, 6 exempt, 0 could not be checked. WCAG AA, 2 modes.</p>
+<p class="meta">4 failed, 20 passed, 6 exempt, 0 baselined, 0 could not be checked. WCAG AA, 2 modes.</p>
 <p class="note">Passing means these token pairs meet WCAG 2.2 contrast ratios. It is not a full accessibility audit.</p>
 </header>
 <section aria-labelledby="mode-light"><h2 id="mode-light">light</h2>
