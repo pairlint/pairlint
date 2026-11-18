@@ -1,0 +1,125 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://github.com/pairlint/pairlint/blob/main/packages/cli/schema.json",
+  "title": "pairlint config",
+  "description": "Which design tokens pairlint checks against which, in which modes.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["pairs"],
+  "anyOf": [{ "required": ["tokens"] }, { "required": ["modes"] }],
+  "properties": {
+    "$schema": {
+      "type": "string",
+      "description": "Path or URL of this schema, for editor completion."
+    },
+    "level": {
+      "description": "WCAG conformance level.",
+      "enum": ["AA", "AAA"],
+      "default": "AA"
+    },
+    "format": {
+      "description": "Format of JSON token files. Files ending in .css are always read as CSS.",
+      "enum": ["auto", "dtcg", "tokens-studio", "style-dictionary"],
+      "default": "auto"
+    },
+    "tokens": {
+      "description": "Token files for a single mode. Next to \"modes\", files every mode loads first.",
+      "$ref": "#/definitions/sources"
+    },
+    "modes": {
+      "description": "Token files per mode, like { \"light\": [...], \"dark\": [...] }. An object instead of a list is a group, and groups combine: { \"brand\": {...}, \"theme\": {...} }.",
+      "type": "object",
+      "minProperties": 1,
+      "oneOf": [
+        { "additionalProperties": { "$ref": "#/definitions/sources" } },
+        {
+          "additionalProperties": {
+            "type": "object",
+            "minProperties": 1,
+            "propertyNames": { "pattern": "^[^/]+$" },
+            "additionalProperties": { "$ref": "#/definitions/sources" }
+          }
+        }
+      ]
+    },
+    "base": {
+      "description": "The color translucent backgrounds sit on. One color or {alias}, or an object keyed by mode name or group value.",
+      "default": "#ffffff",
+      "oneOf": [
+        { "type": "string", "minLength": 1 },
+        { "type": "object", "additionalProperties": { "type": "string", "minLength": 1 } }
+      ]
+    },
+    "baseline": {
+      "description": "Baseline file of accepted failures, relative to this config.",
+      "type": "string",
+      "minLength": 1,
+      "default": "pairlint.baseline.json"
+    },
+    "pairs": {
+      "description": "Which tokens are checked against which. Every foreground is checked against every background.",
+      "type": "array",
+      "minItems": 1,
+      "items": { "$ref": "#/definitions/pair" }
+    }
+  },
+  "definitions": {
+    "source": {
+      "type": "string",
+      "minLength": 1,
+      "pattern": "^[^#]+(#.+)?$",
+      "description": "A token file relative to this config. Add #set for a Tokens Studio set, or #selector or #@media query for CSS."
+    },
+    "sources": {
+      "oneOf": [
+        { "$ref": "#/definitions/source" },
+        { "type": "array", "minItems": 1, "items": { "$ref": "#/definitions/source" } }
+      ]
+    },
+    "patterns": {
+      "description": "A token id or pattern, or a list of them. * matches within one segment and ** matches any number of segments.",
+      "oneOf": [
+        { "$ref": "#/definitions/pattern" },
+        { "type": "array", "minItems": 1, "items": { "$ref": "#/definitions/pattern" } }
+      ]
+    },
+    "pattern": {
+      "type": "string",
+      "minLength": 1,
+      "pattern": "^\\S(.*\\S)?$"
+    },
+    "pair": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["fg", "bg"],
+      "properties": {
+        "fg": { "$ref": "#/definitions/patterns", "description": "Foreground tokens." },
+        "bg": { "$ref": "#/definitions/patterns", "description": "Background tokens." },
+        "use": {
+          "description": "body: 4.5:1 (AAA 7:1). large: 3:1 (AAA 4.5:1). ui: 3:1, for borders, icons and controls. exempt: not checked.",
+          "enum": ["body", "large", "ui", "exempt"],
+          "default": "body"
+        },
+        "min": {
+          "description": "A custom minimum ratio that replaces the WCAG threshold.",
+          "type": "number",
+          "minimum": 1,
+          "maximum": 21
+        },
+        "reason": {
+          "description": "Why this pair is set up this way. Required when use is exempt.",
+          "type": "string",
+          "minLength": 1
+        },
+        "modes": {
+          "description": "Check this pair only in these modes. Full mode names or group values like \"dark\".",
+          "type": "array",
+          "minItems": 1,
+          "items": { "type": "string" }
+        }
+      },
+      "if": { "properties": { "use": { "const": "exempt" } }, "required": ["use"] },
+      "then": { "required": ["reason"] }
+    }
+  }
+}

@@ -1,0 +1,6 @@
+::error title=Contrast%3A color.border.default on color.surface.overlay (dark),file=dtcg-modes/tokens/dark.json,line=16,col=7::2.23:1 (#5f6368 on #2e2e2e), needs 3:1 for UI components and graphics (WCAG 1.4.11 AA).%0ATry: point color.border.default at {color.gray.500} (3.66:1)
+::error title=Contrast%3A color.border.default on color.surface.raised (dark),file=dtcg-modes/tokens/dark.json,line=16,col=7::2.66:1 (#5f6368 on #202124), needs 3:1 for UI components and graphics (WCAG 1.4.11 AA).%0ATry: point color.border.default at {color.gray.500} (4.37:1)
+::error title=Contrast%3A color.text.secondary on color.surface.overlay (dark),file=dtcg-modes/tokens/dark.json,line=6,col=7::3.66:1 (#80868b on #2e2e2e), needs 4.5:1 for body text (WCAG 1.4.3 AA).%0ATry: point color.text.secondary at {color.gray.400} (5.11:1)
+::error title=Contrast%3A color.text.secondary on color.surface.raised (dark),file=dtcg-modes/tokens/dark.json,line=6,col=7::4.37:1 (#80868b on #202124), needs 4.5:1 for body text (WCAG 1.4.3 AA).%0ATry: point color.text.secondary at {color.gray.400} (6.09:1)
+::warning title=pairlint (dark),file=dtcg-modes/tokens/dark.json,line=8,col=7::color.text.link is outside the sRGB gamut, so results that use it are approximate
+pairlint: 4 failed, 20 passed across 2 modes (WCAG AA)

@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- `pairlint init` finds token files and CSS custom properties, names modes after the themes it finds, guesses pairs from token names, and writes a commented `pairlint.config.json`. It never overwrites a config without `--force`.
+- Official GitHub Action: `uses: pairlint/pairlint@v0.1.0` annotates failing tokens in the pull request diff, writes a job summary, and can write SARIF. Inputs reach the shell only through environment variables.
+- New `github` report format: workflow command annotations for each failure and warning.
+- `schema.json` ships with the package for editor completion and validation. Point `$schema` at `./node_modules/pairlint/schema.json`.
+- SARIF and annotation paths are relative to `GITHUB_WORKSPACE` when it is set, so they work when pairlint runs in a subfolder.
+- Releases attach a CycloneDX SBOM for each package. OpenSSF Scorecard runs every week.
+
 - Style Dictionary 3 token files, detected automatically or set with `"format": "style-dictionary"`. References that end in `.value` resolve to the token.
 - CSS custom properties as tokens. Files ending in `.css` read `:root` by default, or a theme with `theme.css#[data-theme=dark]` or `theme.css#@media (prefers-color-scheme: dark)`. `var()` becomes an alias and its fallback is used when the target is missing.
 - Brand × theme modes: groups inside `modes` combine into every pairing, named like `acme/dark`. Pair `modes`, `base` and `--mode` accept a full name or one value such as `dark`.

@@ -1,0 +1,9 @@
+{
+  "$schema": "./node_modules/pairlint/schema.json",
+  // Found 11 color tokens in 2 files.
+  "tokens": ["tokens/color/base.json", "tokens/color/font.json"],
+  // Pairs inferred from token names. Check that each one is a real combination in your UI.
+  "pairs": [
+    { "fg": "color.font.*", "bg": "color.background.*" }
+  ]
+}

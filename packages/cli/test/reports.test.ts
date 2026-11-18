@@ -5,6 +5,9 @@ import { contrastRatio, parseColor } from "@pairlint/contrast";
 import { afterAll, describe, expect, it } from "vitest";
 import {
   type CheckReport,
+  escapeData,
+  escapeProperty,
+  formatGithub,
   formatHtml,
   formatMarkdown,
   formatSarif,
@@ -132,6 +135,87 @@ describe("Markdown report", () => {
 
   it("accepts md as a short name", () => {
     expect(runCli(["-f", "md"], { cwd }).stdout).toContain("### pairlint:");
+  });
+});
+
+describe("GitHub annotations", () => {
+  const toPath = (file: string) => `design/${file}`;
+
+  it("matches the golden file", async () => {
+    const result = runCli(["--format", "github"], { cwd, env: { GITHUB_WORKSPACE: fixture("") } });
+    expect(result.code).toBe(1);
+    await expect(result.stdout).toMatchFileSnapshot("./fixtures/dtcg-modes/expected-github.txt");
+  });
+
+  it("annotates the foreground token with the ratio and the fix", () => {
+    const output = formatGithub(
+      report([
+        failing({
+          suggestion: {
+            kind: "token",
+            side: "fg",
+            token: "text.muted",
+            value: "{gray.700}",
+            color: "#555555",
+            ratio: 7.46,
+          },
+        }),
+      ]),
+      { toPath },
+    );
+    expect(output.split("\n")[0]).toBe(
+      "::error title=Contrast%3A text.muted on surface.base (light),file=design/tokens/light.json,line=4,col=5::" +
+        "3.20:1 (#888888 on #ffffff), needs 4.5:1 for body text (WCAG 1.4.3 AA).%0ATry: point text.muted at {gray.700} (7.46:1)",
+    );
+  });
+
+  it("annotates token problems and warnings, and skips passing pairs", () => {
+    const output = formatGithub(
+      {
+        ...report([
+          failing({ status: "pass", ratio: 9 }),
+          failing({ status: "error", message: 'Token "x" does not exist', fgLocation: undefined }),
+        ]),
+        warnings: [
+          {
+            mode: "light",
+            message: "out of gamut",
+            location: { file: "a.json", line: 2, column: 3 },
+          },
+        ],
+      },
+      { toPath },
+    );
+    expect(output).toBe(
+      [
+        '::error title=Cannot check text.muted on surface.base (light)::Token "x" does not exist',
+        "::warning title=pairlint (light),file=design/a.json,line=2,col=3::out of gamut",
+        "pairlint: 0 failed, 1 passed, 1 could not be checked across 1 mode (WCAG AA)",
+        "",
+      ].join("\n"),
+    );
+  });
+
+  it("mentions an expired baseline entry", () => {
+    const output = formatGithub(
+      report([
+        failing({
+          baseline: { reason: "Old brand", owner: "@design", expires: "2026-01-01" },
+          baselineExpired: true,
+        }),
+      ]),
+      { toPath },
+    );
+    expect(output).toContain("expired on 2026-01-01");
+  });
+
+  it("escapes values so a token name cannot start another command", () => {
+    expect(escapeData("50%\r\n::error::x")).toBe("50%25%0D%0A::error::x");
+    expect(escapeProperty("a:b,c\nd")).toBe("a%3Ab%2Cc%0Ad");
+    const output = formatGithub(report([failing({ fg: "evil\n::error::pwned", mode: "a,b" })]), {
+      toPath,
+    });
+    expect(output.split("\n").filter((line) => line.startsWith("::"))).toHaveLength(1);
   });
 });
 

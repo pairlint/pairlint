@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   isCssPath,
+  listCssContexts,
   normalizeMedia,
   normalizeSelector,
   parseCssTokens,
@@ -227,5 +228,19 @@ describe("selector and media normalization", () => {
     expect(normalizeMedia("SCREEN  and ( prefers-color-scheme : Dark )")).toBe(
       "screen and (prefers-color-scheme: dark)",
     );
+  });
+});
+
+describe("listCssContexts", () => {
+  it("lists every selection with custom properties, in file order", () => {
+    expect(listCssContexts(css(THEME))).toEqual([
+      ":root",
+      '[data-theme="dark"]',
+      "@media (prefers-color-scheme: dark)",
+    ]);
+  });
+
+  it("skips rules without custom properties", () => {
+    expect(listCssContexts(css(".a { color: red } .b { --x: #000 }"))).toEqual([".b"]);
   });
 });

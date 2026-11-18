@@ -15,7 +15,9 @@ import { type CheckReport, exitCode, explainPair, runCheck } from "./check.js";
 import { CONFIG_FILE, modeNames, parseConfig } from "./config.js";
 import { InputError } from "./errors.js";
 import { createFileReader, MAX_FILE_BYTES, type ReadFile, toDisplayPath } from "./files.js";
+import { findTokenFiles, inferConfig, renderConfig } from "./init.js";
 import { formatExplainText } from "./report-explain.js";
+import { formatGithub } from "./report-github.js";
 import { formatHtml } from "./report-html.js";
 import { formatExplainJson, formatJson } from "./report-json.js";
 import { formatMarkdown } from "./report-markdown.js";
@@ -42,15 +44,17 @@ const HELP = `Usage
   pairlint explain <fg> <bg>       Show how one pair's result was worked out
   pairlint baseline --reason <text> --owner <name> [--expires <date>]
                                    Accept today's failures and fail only on new ones
+  pairlint init [--force]          Find token files and write a starting config
 
 Options
   -c, --config <path>   Config file (default: ./${CONFIG_FILE})
-  -f, --format <name>   text, json, sarif, markdown or html (default: text)
+  -f, --format <name>   text, json, sarif, markdown, html or github (default: text)
   -o, --output <path>   Write the report to a file instead of the terminal
   -l, --level <level>   AA or AAA, overrides the config
   -m, --mode <name>     Check only this mode. Repeat for more than one
       --verbose         List passing, exempt and baselined pairs too
       --ignore-baseline Report baselined failures as failures
+      --force           Let init replace an existing config
       --color           Force colored output
       --no-color        Disable colored output
   -h, --help            Show this help
@@ -107,6 +111,13 @@ function runOrThrow(context: RunContext): number {
     return 0;
   }
   const command = positionals[0] ?? "check";
+  if (command === "init") {
+    if (positionals.length > 1) {
+      throw new InputError(`Unknown command "${positionals.join(" ")}". Run "pairlint --help".`);
+    }
+    return runInit(context, values.config ?? CONFIG_FILE, values.force === true);
+  }
+  if (values.force !== undefined) throw new InputError('--force only works with "pairlint init".');
   if (command === "explain") {
     if (positionals.length !== 3) {
       throw new InputError(
@@ -201,7 +212,10 @@ function runOrThrow(context: RunContext): number {
   }
   if (previous && values["ignore-baseline"] !== true) applyBaseline(report, previous, today);
 
-  const toUri = (file: string) => toDisplayPath(relative(context.cwd, resolve(configDir, file)));
+  // SARIF and annotations need paths from the repository root, which is the workspace in
+  // GitHub Actions even when pairlint runs in a subfolder.
+  const root = context.env.GITHUB_WORKSPACE ?? context.cwd;
+  const toUri = (file: string) => toDisplayPath(relative(root, resolve(configDir, file)));
   switch (format) {
     case "json":
       write(formatJson(report));
@@ -211,6 +225,9 @@ function runOrThrow(context: RunContext): number {
       break;
     case "markdown":
       write(formatMarkdown(report));
+      break;
+    case "github":
+      write(formatGithub(report, { toPath: toUri }));
       break;
     case "html":
       write(formatHtml(report, { version: context.version }));
@@ -287,7 +304,7 @@ function writeBaseline(
   return 0;
 }
 
-const FORMATS = ["text", "json", "sarif", "markdown", "html"] as const;
+const FORMATS = ["text", "json", "sarif", "markdown", "html", "github"] as const;
 type Format = (typeof FORMATS)[number];
 
 function normalizeFormat(name: string): Format | undefined {
@@ -314,6 +331,7 @@ function parseCliArgs(argv: readonly string[]) {
       owner: { type: "string" },
       expires: { type: "string" },
       color: { type: "boolean" },
+      force: { type: "boolean" },
       help: { type: "boolean", short: "h" },
       version: { type: "boolean", short: "v" },
     },
@@ -327,4 +345,44 @@ function useColor(values: { color?: boolean | undefined }, context: RunContext):
   const force = context.env.FORCE_COLOR;
   if (force !== undefined && force !== "" && force !== "0") return true;
   return context.isTTY && context.env.TERM !== "dumb";
+}
+
+/** pairlint init: find token files next to the config and write a starting config. */
+function runInit(context: RunContext, configArg: string, force: boolean): number {
+  const configPath = resolve(context.cwd, configArg);
+  if (existsSync(configPath) && !force) {
+    throw new InputError(`${configArg} already exists. Run "pairlint init --force" to replace it.`);
+  }
+  const root = dirname(configPath);
+  const inferred = inferConfig(findTokenFiles(root));
+  if (inferred.colorCount === 0) {
+    throw new InputError(
+      `No color tokens found in ${root}. pairlint looks for DTCG, Tokens Studio and Style Dictionary JSON files, and CSS files with custom properties. Run init in the folder that holds them, or write the config by hand (see the README).`,
+    );
+  }
+  const schemaPath = toDisplayPath(
+    relative(root, resolve(context.cwd, "node_modules", "pairlint", "schema.json")),
+  );
+  const text = renderConfig(inferred, schemaPath.startsWith(".") ? schemaPath : `./${schemaPath}`);
+  // Never write a config pairlint itself would reject.
+  parseConfig(text, configArg);
+  try {
+    writeFileSync(configPath, text, { encoding: "utf8", flag: force ? "w" : "wx" });
+  } catch (error) {
+    throw new InputError(`Cannot write ${configArg}: ${(error as Error).message}`);
+  }
+
+  const modes = inferred.modes.map((mode) => mode.name);
+  const lines = [
+    `Wrote ${toDisplayPath(configArg)}`,
+    `  ${inferred.colorCount} color tokens in ${inferred.fileCount} ${inferred.fileCount === 1 ? "file" : "files"}`,
+    `  ${modes.length} ${modes.length === 1 ? "mode" : "modes"}: ${modes.join(", ")}`,
+    `  ${inferred.pairs.length} ${inferred.pairs.length === 1 ? "pair rule" : "pair rules"}`,
+    "",
+    inferred.guessed
+      ? "Token names did not show which are text and which are backgrounds. Edit the pairs, then run: npx pairlint"
+      : "Check that the pairs match your UI, then run: npx pairlint",
+  ];
+  context.stdout(`${lines.join("\n")}\n`);
+  return 0;
 }

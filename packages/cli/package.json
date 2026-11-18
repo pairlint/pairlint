@@ -12,10 +12,12 @@
       "types": "./dist/index.d.ts",
       "default": "./dist/index.js"
     },
-    "./package.json": "./package.json"
+    "./package.json": "./package.json",
+    "./schema.json": "./schema.json"
   },
   "files": [
-    "dist"
+    "dist",
+    "schema.json"
   ],
   "engines": {
     "node": ">=22.14"
@@ -29,7 +31,9 @@
     "lint",
     "dtcg",
     "tokens-studio",
-    "dark-mode"
+    "dark-mode",
+    "style-dictionary",
+    "css-variables"
   ],
   "repository": {
     "type": "git",
