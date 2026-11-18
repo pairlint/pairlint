@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- `init` pairs text and borders only with backgrounds they could sit on: their own component's (`button.color` with `button.background-color`), or else the shared surfaces. Different intents (success text on a danger background) and states (hover text on a pressed background) are kept apart, and strong fills (`emphasis`, `solid`, `inverse`) only get their on- colors, preferring fills with the same intent. The config notes how many pairs that makes and lists colors it could not pair. On Primer this cut the pairs per mode from about 78,000 to 1,200.
 - Aliases to names with spaces, like `{Light.Moss Green.7}` from a Figma variables export, now resolve instead of failing as "not a color".
 - `init` keeps light and dark high contrast apart (`light-high-contrast`, `dark-high-contrast`) and loads each after its base theme. It names CSS themes from attribute values, so `[data-light-theme="dark"]` is a dark theme.
 - `init` reads camelCase names (`fgColor-default`, `bgColor-muted`) and CSS property names (`button.color` next to `button.background-color`), leaves disabled backgrounds out of the foregrounds, follows aliases before counting a token as a color, and never writes a pattern that also matches untyped tokens that are not colors.

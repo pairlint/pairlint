@@ -377,7 +377,10 @@ function runInit(context: RunContext, configArg: string, force: boolean): number
     `Wrote ${toDisplayPath(configArg)}`,
     `  ${inferred.colorCount} color tokens in ${inferred.fileCount} ${inferred.fileCount === 1 ? "file" : "files"}`,
     `  ${modes.length} ${modes.length === 1 ? "mode" : "modes"}: ${modes.join(", ")}`,
-    `  ${inferred.pairs.length} ${inferred.pairs.length === 1 ? "pair rule" : "pair rules"}`,
+    `  ${inferred.pairs.length} ${inferred.pairs.length === 1 ? "pair rule" : "pair rules"}, about ${inferred.pairCount} pairs per mode`,
+    ...(inferred.unpaired.length > 0
+      ? [`  ${inferred.unpaired.length} colors not paired (listed in the config)`]
+      : []),
     "",
     inferred.guessed
       ? "Token names did not show which are text and which are backgrounds. Edit the pairs, then run: npx pairlint"

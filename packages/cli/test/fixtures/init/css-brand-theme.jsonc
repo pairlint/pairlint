@@ -9,9 +9,11 @@
   // Also has colors, but does not look like a theme: brands.css#.acme
   // Also has colors, but does not look like a theme: brands.css#.zen
   // Pairs inferred from token names. Check that each one is a real combination in your UI.
+  // Text and borders are paired with their own component's backgrounds, or else the shared
+  // surfaces. Different intents and states are kept apart. About 6 pairs per mode.
+  // Not paired, so not checked: on-brand. Add pairs for any your UI uses.
   "pairs": [
-    { "fg": ["on-brand", "text*"], "bg": "surface*" },
-    { "fg": "border", "bg": "surface*", "use": "ui" },
-    { "fg": "on-brand", "bg": "surface*", "use": "exempt", "reason": "On- colors sit on their own fill, which is checked separately" }
+    { "fg": "text*", "bg": "surface*" },
+    { "fg": "border", "bg": "surface*", "use": "ui" }
   ]
 }

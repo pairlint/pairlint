@@ -7,6 +7,8 @@
     "dark": ["tokens.json#core", "tokens.json#dark"]
   },
   // Pairs inferred from token names. Check that each one is a real combination in your UI.
+  // Text and borders are paired with their own component's backgrounds, or else the shared
+  // surfaces. Different intents and states are kept apart. About 2 pairs per mode.
   "pairs": [
     { "fg": ["ink", "text.default"], "bg": "bg.default" }
   ]
