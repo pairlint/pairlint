@@ -499,6 +499,51 @@ describe("inferConfig", () => {
     );
   });
 
+  it("reads backgrounds marked primary as fills when no background names the on- color's fill", () => {
+    const ids = [
+      "color.text.primary",
+      "color.text.on-solid.primary",
+      "color.bg.canvas.default",
+      "color.bg.subtle-primary",
+      "color.bg.action.primary.rest",
+      "color.bg.action.primary.hovered",
+      "color.bg.critical.primary",
+      "color.bg.critical.hovered",
+      "color.bg.critical.subtle",
+      "color.bg.critical.subtle-hovered",
+      "color.bg.accent.rest",
+      "color.bg.accent.selected",
+      "color.bg.accent.subtle",
+      "color.bg.info.rest",
+    ];
+    const config = inferConfig([colors(ids)]);
+    expect(checkedPairs(config.pairs, ids)).toEqual([
+      "color.text.on-solid.primary on color.bg.accent.rest",
+      "color.text.on-solid.primary on color.bg.action.primary.hovered",
+      "color.text.on-solid.primary on color.bg.action.primary.rest",
+      "color.text.on-solid.primary on color.bg.critical.hovered",
+      "color.text.on-solid.primary on color.bg.critical.primary",
+      // Selected is a light state, and info has no subtle or primary background to show that its
+      // resting color is a fill, so both stay surfaces.
+      "color.text.primary on color.bg.accent.selected",
+      "color.text.primary on color.bg.accent.subtle",
+      "color.text.primary on color.bg.canvas.default",
+      "color.text.primary on color.bg.critical.subtle",
+      "color.text.primary on color.bg.critical.subtle-hovered",
+      "color.text.primary on color.bg.info.rest",
+      "color.text.primary on color.bg.subtle-primary",
+    ]);
+    expect(config.unpaired).toEqual([]);
+  });
+
+  it("keeps backgrounds marked primary as surfaces when on- colors find their fills by name", () => {
+    const ids = ["fgColor-default", "fgColor-onEmphasis", "bgColor-emphasis", "bgColor-primary"];
+    expect(checkedPairs(inferConfig([colors(ids)]).pairs, ids)).toEqual([
+      "fgColor-default on bgColor-primary",
+      "fgColor-onEmphasis on bgColor-emphasis",
+    ]);
+  });
+
   it("lists text and fills it could not pair, and writes them into the config", () => {
     const ids = [
       "color.text.primary",

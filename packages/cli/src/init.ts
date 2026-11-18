@@ -397,6 +397,19 @@ const VARIANT_WORDS = [
   "grey",
   "transparent",
 ];
+/** States a strong fill has: its resting color and the darker ones it turns while used. */
+const FILL_STATES = ["rest", "hover", "hovered", "active", "pressed"];
+/** Variant words that mark a light background, never a strong fill. */
+const LIGHT_WORDS = [
+  "subtle",
+  "muted",
+  "weak",
+  "secondary",
+  "tertiary",
+  "default",
+  "base",
+  "light",
+];
 /** Scope words for the page itself, the surface that component text falls back to. */
 const PAGE_WORDS = ["document", "page", "body", "canvas", "app", "site", "root"];
 
@@ -597,7 +610,17 @@ function inferPairs(colors: string[], others: ReadonlySet<string>): PairInferenc
   );
   const facet = (id: string) => facets.get(id) as Facets;
 
-  const onFills = new Map(ids("on").map((id) => [id, fillsFor(id, colors, roleOfId, facet)]));
+  const named = new Map(ids("on").map((id) => [id, fillsFor(id, colors, roleOfId, facet)]));
+  // An on- color whose fill has no name of its own, like "on-solid" when no background says
+  // "solid", sits on the backgrounds marked primary and their states.
+  const unnamed = [...named.values()].some((found) => found.length === 0);
+  const primary = unnamed ? primaryFills(ids("bg"), classified) : [];
+  const onFills = new Map(
+    [...named].map(([id, found]) => [
+      id,
+      found.length > 0 ? found : sameIntentFirst(id, primary, facet),
+    ]),
+  );
   const fillIds = new Set([
     ...[...onFills.values()].flat(),
     ...ids("bg").filter((id) => wordsOf(id).some((word) => FILL_WORDS.includes(word))),
@@ -815,9 +838,47 @@ function fillsFor(
     const otherWords = wordsOf(other);
     return otherWords.join("-").includes(name) && otherWords.includes(name.split("-")[0] ?? "");
   });
+  return sameIntentFirst(id, matches, facet);
+}
+
+/** The fills with the on- color's intent when there are any, otherwise all of them. */
+function sameIntentFirst(id: string, fills: string[], facet: (id: string) => Facets): string[] {
   const intent = facet(id).intent;
-  const same = intent === undefined ? [] : matches.filter((m) => facet(m).intent === intent);
-  return same.length > 0 ? same : matches;
+  const same = intent === undefined ? [] : fills.filter((fill) => facet(fill).intent === intent);
+  return same.length > 0 ? same : fills;
+}
+
+/**
+ * Strong fills named by variant instead of by a fill word: backgrounds marked primary, like
+ * "color.bg.critical.primary" and "color.bg.action.primary.rest", the states next to them, like
+ * "color.bg.critical.hovered", and the resting states of an intent that also has a subtle
+ * background, like "color.bg.success.rest" next to "color.bg.success.subtle". Light variants, like
+ * "color.bg.subtle-primary", and the selected state are left out.
+ */
+function primaryFills(bgs: string[], classified: ReadonlyMap<string, Classified>): string[] {
+  const after = (id: string) => classified.get(id)?.after ?? [];
+  const candidates = bgs.filter((id) => !after(id).some((word) => LIGHT_WORDS.includes(word)));
+  // The group a background belongs to: "critical" for both critical.primary and critical.hovered.
+  const groupOf = (words: string[]) =>
+    words.filter((word) => word !== "primary" && !STATE_WORDS.includes(word)).join(".");
+  const primaryGroups = new Set(
+    candidates.filter((id) => after(id).includes("primary")).map((id) => groupOf(after(id))),
+  );
+  const subtleGroups = new Set(
+    bgs
+      .filter((id) => after(id).includes("subtle"))
+      .map((id) => groupOf(after(id).filter((word) => word !== "subtle"))),
+  );
+  return candidates
+    .filter((id) => {
+      const words = after(id);
+      if (words.includes("primary")) return true;
+      const states = words.filter((word) => STATE_WORDS.includes(word));
+      if (states.length === 0 || !states.every((word) => FILL_STATES.includes(word))) return false;
+      const group = groupOf(words);
+      return primaryGroups.has(group) || subtleGroups.has(group);
+    })
+    .sort();
 }
 
 /** Writes the config as commented JSON. */
