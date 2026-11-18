@@ -32,6 +32,7 @@ import {
 } from "./config.js";
 import { InputError } from "./errors.js";
 import type { ReadFile } from "./files.js";
+import { isDarkName } from "./init-modes.js";
 
 export const MAX_CHECKS = 1_000_000;
 
@@ -61,6 +62,13 @@ export interface PairResult {
   bgLocation?: SourceLocation;
   /** For failing pairs, the smallest change that would make the pair pass, when one exists. */
   suggestion?: Suggestion;
+  /** Why there is no suggestion, like "no single shade passes on all its backgrounds". */
+  note?: string;
+  /** For errors, the token that could not be read. */
+  errorToken?: string;
+  /** The blended colors before rounding to hex, when the ratio is within 0.02 of the minimum. */
+  fgExact?: string;
+  bgExact?: string;
   /** The baseline entry that covers this pair, when there is one. */
   baseline?: { reason: string; owner: string; expires?: string };
   /** True when the baseline entry has expired, so the pair fails again. */
@@ -80,11 +88,23 @@ export type Suggestion =
       /** The suggested shade's own color, before blending. */
       color: string;
       ratio: number;
+      /** Set when the same change passes on every background this token is checked on. */
+      backgrounds?: number;
     }
-  | { kind: "color"; side: "fg"; token: string; value: string; oklch: string; ratio: number };
+  | {
+      kind: "color";
+      side: "fg";
+      token: string;
+      value: string;
+      oklch: string;
+      ratio: number;
+      backgrounds?: number;
+    };
 
 export interface Warning {
+  /** The mode, or "12 modes" when the warning covers several, which `modes` then lists. */
   mode: string;
+  modes?: string[];
   message: string;
   location?: SourceLocation;
 }
@@ -121,21 +141,155 @@ export function runCheck(
   const results: PairResult[] = [];
   const warnings: Warning[] = [];
   let checks = 0;
+  // Patterns that matched nothing, by rule and pattern, with the modes and messages.
+  const gaps = new Map<string, { gap: Gap; modes: string[]; messages: string[] }>();
+  const activeIn = new Map<PairRule, number>();
 
   for (const mode of modes) {
     const checker = new ModeChecker(mode, loadTokens(mode, config, readFile), level, warnings);
-    for (const [fg, bg, rule] of checker.expandPairs(config.pairs)) {
+    const found: Gap[] = [];
+    const inMode: PairResult[] = [];
+    for (const [fg, bg, rule] of checker.expandPairs(config.pairs, found)) {
       checks++;
       if (checks > MAX_CHECKS) {
         throw new InputError(
           `The pairs in ${config.file} expand to more than ${MAX_CHECKS.toLocaleString("en-US")} checks. Narrow the patterns.`,
         );
       }
-      results.push(checker.check(fg, bg, rule));
+      inMode.push(checker.check(fg, bg, rule));
+    }
+    checker.unifySuggestions(inMode);
+    checker.warnAboutBase();
+    results.push(...inMode);
+    for (const rule of checker.activeRules(config.pairs)) {
+      activeIn.set(rule, (activeIn.get(rule) ?? 0) + 1);
+    }
+    for (const gap of found) {
+      const key = `${config.pairs.indexOf(gap.rule)}\u0000${gap.side}\u0000${gap.pattern}`;
+      const entry = gaps.get(key) ?? { gap, modes: [], messages: [] };
+      entry.modes.push(mode.name);
+      entry.messages.push(gap.message);
+      gaps.set(key, entry);
     }
   }
 
+  // A pattern missing in every mode is a mistake in the config. Missing in only some modes, as
+  // when one brand lacks a token, those modes skip it with a warning.
+  for (const { gap, modes: missing, messages } of gaps.values()) {
+    if (missing.length === activeIn.get(gap.rule)) {
+      const message =
+        missing.length === 1
+          ? (messages[0] as string)
+          : `"${gap.pattern}" (${gap.side}) ${gap.exact ? "does not exist" : "matched no color tokens"} in any of the ${missing.length} modes`;
+      throw new InputError(message, gap.rule.location);
+    }
+  }
+  for (const { gap, modes: missing, messages } of gaps.values()) {
+    if (missing.length === 1) {
+      warnings.push({
+        mode: missing[0] as string,
+        message: `${messages[0]}, so pairs with it are skipped in this mode`,
+        location: gap.rule.location,
+      });
+      continue;
+    }
+    const shown = missing.slice(0, 5).join(", ");
+    const more = missing.length > 5 ? ` and ${missing.length - 5} more` : "";
+    warnings.push({
+      mode: `${missing.length} modes`,
+      modes: missing,
+      message: `"${gap.pattern}" (${gap.side}) ${gap.exact ? "does not exist" : "matched no color tokens"} in ${missing.length} of ${activeIn.get(gap.rule)} modes (${shown}${more}), so pairs with it are skipped there`,
+      location: gap.rule.location,
+    });
+  }
+
   return { level, modes: modes.map((mode) => mode.name), results, warnings };
+}
+
+/** A pattern in a rule that matched no color tokens in one mode. */
+interface Gap {
+  rule: PairRule;
+  side: "fg" | "bg";
+  pattern: string;
+  /** True for an exact token id rather than a pattern. */
+  exact: boolean;
+  message: string;
+}
+
+const COLOR_FUNCTIONS = /^(rgba?|hsla?|hwb|lab|lch|oklab|oklch|color)\(/i;
+const DIMENSION = /^[+-]?(\d+\.?\d*|\.\d+)([a-z%]+)?$/i;
+const KEYWORDS = new Set([
+  "normal",
+  "bold",
+  "bolder",
+  "lighter",
+  "italic",
+  "oblique",
+  "none",
+  "auto",
+  "inherit",
+  "initial",
+  "unset",
+  "uppercase",
+  "lowercase",
+  "capitalize",
+  "underline",
+  "solid",
+  "dashed",
+  "dotted",
+]);
+
+/**
+ * True for a value that is plainly something other than a color: a number or dimension
+ * ("16px", "0.125rem"), a font stack ("Inter, sans-serif"), a keyword ("bold") or a shorthand
+ * of several values ("var(--weight) var(--size) / var(--line-height)"). A value that could be a
+ * mistyped color, like "#12345" or "rgb(1 2)", is not.
+ */
+export function clearlyNotColor(value: unknown): boolean {
+  if (typeof value === "number" || typeof value === "boolean") return true;
+  if (typeof value === "object" && value !== null) {
+    return !("colorSpace" in value) && !("components" in value) && !("hex" in value);
+  }
+  if (typeof value !== "string") return false;
+  const text = value.trim();
+  if (text === "" || text.startsWith("#") || COLOR_FUNCTIONS.test(text)) return false;
+  if (DIMENSION.test(text) || KEYWORDS.has(text.toLowerCase())) return true;
+  const parts = topLevelParts(text);
+  if (parts.some((part) => part.startsWith("#") || COLOR_FUNCTIONS.test(part))) return false;
+  if (parts.length > 1) return true;
+  return text.includes(",") && !text.includes("(");
+}
+
+/** Splits on spaces, commas and "/" outside parentheses. */
+function topLevelParts(text: string): string[] {
+  const parts: string[] = [];
+  let depth = 0;
+  let current = "";
+  for (const char of text) {
+    if (char === "(") depth++;
+    if (char === ")") depth = Math.max(0, depth - 1);
+    if (depth === 0 && /[\s,/]/.test(char)) {
+      if (current !== "") parts.push(current);
+      current = "";
+    } else {
+      current += char;
+    }
+  }
+  if (current !== "") parts.push(current);
+  return parts;
+}
+
+/** "rgb(254.62 237.41 236.09)": a color without rounding to 8 bits. */
+function exactRgb(color: Rgba): string {
+  const channel = (value: number) => Number((value * 255).toFixed(2)).toString();
+  return `rgb(${channel(color.r)} ${channel(color.g)} ${channel(color.b)})`;
+}
+
+/** True when rounding to hex changes the color, so the hex alone does not give the ratio. */
+function rounds(color: Rgba): boolean {
+  return [color.r, color.g, color.b].some(
+    (value) => Math.abs(value * 255 - Math.round(value * 255)) > 0.005,
+  );
 }
 
 export interface SideDetail {
@@ -240,6 +394,8 @@ class ModeChecker {
   private readonly colors = new Map<string, ColorLookup>();
   private readonly gamutWarned = new Set<string>();
   private base: Rgba | undefined;
+  /** Whether any checked background was translucent, so the base color mattered. */
+  private blended = false;
 
   constructor(
     private readonly mode: ModeConfig,
@@ -254,15 +410,25 @@ class ModeChecker {
     }
   }
 
-  /** Expands rules into concrete pairs. An exempt rule wins over every other rule for the same pair. */
-  *expandPairs(rules: readonly PairRule[]): Generator<[string, string, PairRule]> {
-    const active = rules.filter(
+  /** The rules that apply to this mode. */
+  activeRules(rules: readonly PairRule[]): PairRule[] {
+    return rules.filter(
       (rule) => !rule.modes || rule.modes.some((name) => modeMatches(this.mode, name)),
     );
-    const expanded = active.map((rule) => ({
+  }
+
+  /**
+   * Expands rules into concrete pairs. An exempt rule wins over every other rule for the same
+   * pair. Patterns that match nothing in this mode are added to `gaps` and skipped.
+   */
+  *expandPairs(
+    rules: readonly PairRule[],
+    gaps: Gap[] = [],
+  ): Generator<[string, string, PairRule]> {
+    const expanded = this.activeRules(rules).map((rule) => ({
       rule,
-      fg: this.matchColors(rule.fg, rule, "fg"),
-      bg: this.matchColors(rule.bg, rule, "bg"),
+      fg: this.matchColors(rule.fg, rule, "fg", gaps),
+      bg: this.matchColors(rule.bg, rule, "bg", gaps),
     }));
 
     const exempt = new Set<string>();
@@ -303,6 +469,7 @@ class ModeChecker {
     if (!fgColor.ok || !bgColor.ok) {
       result.status = "error";
       result.message = !fgColor.ok ? fgColor.error : (bgColor as { error: string }).error;
+      result.errorToken = !fgColor.ok ? fg : bg;
       return result;
     }
 
@@ -332,6 +499,12 @@ class ModeChecker {
     }
     result.fgColor = toHex(foreground);
     result.bgColor = toHex(background);
+    if (bgColor.color.rgba.alpha < 1) this.blended = true;
+    // Near the line, the rounded hex can give a different ratio than the one printed.
+    if (Math.abs(ratio - required) < 0.02) {
+      if (rounds(foreground)) result.fgExact = exactRgb(foreground);
+      if (rounds(background)) result.bgExact = exactRgb(background);
+    }
     result.status = meetsRatio(ratio, required) ? "pass" : "fail";
     if (result.status === "fail") {
       const suggestion = this.suggest(
@@ -367,6 +540,96 @@ class ModeChecker {
     }
   }
 
+  /**
+   * Gives each failing foreground one suggestion that passes on every background it is checked on
+   * in this mode, instead of a different shade per background. When no single shade does, the
+   * failures say so instead of suggesting a shade that would break another pair.
+   */
+  unifySuggestions(results: PairResult[]): void {
+    const byFg = new Map<string, PairResult[]>();
+    for (const result of results) {
+      if (result.ratio === undefined || result.required === undefined) continue;
+      byFg.set(result.fg, [...(byFg.get(result.fg) ?? []), result]);
+    }
+    let base: Rgba;
+    try {
+      base = this.baseColor();
+    } catch (error) {
+      if (error instanceof InputError) return;
+      throw error;
+    }
+    for (const [fg, list] of byFg) {
+      const failing = list.filter((result) => result.status === "fail");
+      if (failing.length === 0 || list.length < 2) continue;
+      const fgColor = this.lookup(fg);
+      if (!fgColor.ok) continue;
+      const backgrounds = list.flatMap((result) => {
+        const bg = this.lookup(result.bg);
+        return bg.ok
+          ? [{ result, color: compositeOver(bg.color.rgba, base), required: result.required ?? 0 }]
+          : [];
+      });
+      const ratioOn = (candidate: Rgba, background: Rgba) =>
+        contrastRatio(compositeOver(candidate, background), background);
+      const passesAll = (candidate: Rgba) =>
+        backgrounds.every(({ color, required }) => ratioOn(candidate, color) >= required);
+      const ratioFor = (candidate: Rgba, result: PairResult) => {
+        const entry = backgrounds.find((item) => item.result === result);
+        return entry ? ratioOn(candidate, entry.color) : 0;
+      };
+      const count = backgrounds.length;
+
+      const shade = this.nearestInScale(fg, "fg", (candidate) =>
+        passesAll(candidate)
+          ? Math.min(...backgrounds.map((b) => ratioOn(candidate, b.color)))
+          : undefined,
+      );
+      if (shade && shade.kind === "token") {
+        const rgba = parseColor(shade.color).rgba;
+        for (const result of failing) {
+          result.suggestion = { ...shade, ratio: ratioFor(rgba, result), backgrounds: count };
+        }
+        continue;
+      }
+      const current = oklabLightness(fgColor.color.rgba);
+      let best: { hex: string; oklch: string; rgba: Rgba; change: number } | undefined;
+      for (const { color, required } of backgrounds) {
+        const fix = adjustLightness(fgColor.color.rgba, color, required);
+        if (!fix) continue;
+        const rgba = parseColor(fix.hex).rgba;
+        if (!passesAll(rgba)) continue;
+        const change = Math.abs(oklabLightness(rgba) - current);
+        if (!best || change < best.change) best = { hex: fix.hex, oklch: fix.oklch, rgba, change };
+      }
+      for (const result of failing) {
+        if (best) {
+          result.suggestion = {
+            kind: "color",
+            side: "fg",
+            token: fg,
+            value: best.hex,
+            oklch: best.oklch,
+            ratio: ratioFor(best.rgba, result),
+            backgrounds: count,
+          };
+        } else if (result.suggestion?.side !== "bg") {
+          delete result.suggestion;
+          result.note = `No single shade of ${fg} passes on all ${count} backgrounds it is checked on in this mode`;
+        }
+      }
+    }
+  }
+
+  /** Warns when a dark mode still blends translucent backgrounds over white. */
+  warnAboutBase(): void {
+    if (!this.blended || !isDarkName(this.mode.name) || this.baseHex() !== "#ffffff") return;
+    const key = Object.values(this.mode.axes ?? {}).find(isDarkName) ?? this.mode.name;
+    this.warnings.push({
+      mode: this.mode.name,
+      message: `Translucent backgrounds in this dark mode are blended over white. Set its base to your page background, like "base": { "${key}": "{color.bg.canvas}" }`,
+    });
+  }
+
   /** Finds the rule that covers this pair, the same way a full check would. */
   ruleFor(fg: string, bg: string, rules: readonly PairRule[]): PairRule | undefined {
     for (const [f, b, rule] of this.expandPairs(rules)) {
@@ -384,22 +647,23 @@ class ModeChecker {
     required: number,
   ): Suggestion | undefined {
     const background = compositeOver(bgRgba, base);
-    const fromFgScale = this.nearestInScale(fg, "fg", required, (candidate) =>
-      contrastRatio(compositeOver(candidate, background), background),
+    const passing = (ratio: number) => (ratio < required ? undefined : ratio);
+    const fromFgScale = this.nearestInScale(fg, "fg", (candidate) =>
+      passing(contrastRatio(compositeOver(candidate, background), background)),
     );
     if (fromFgScale) return fromFgScale;
 
     const bgRatio = (candidate: Rgba) => {
       const next = compositeOver(candidate, base);
-      return contrastRatio(compositeOver(fgRgba, next), next);
+      return passing(contrastRatio(compositeOver(fgRgba, next), next));
     };
     // A background is shared by many pairs, so only nudge it. Turning a dark surface light to
     // fix one pair would break the theme.
-    const fromBgScale = this.nearestInScale(bg, "bg", required, bgRatio, MAX_BACKGROUND_SHIFT);
+    const fromBgScale = this.nearestInScale(bg, "bg", bgRatio, MAX_BACKGROUND_SHIFT);
     if (fromBgScale) return fromBgScale;
 
     const fix = adjustLightness(fgRgba, background, required);
-    if (!fix) return this.nearestInScale(bg, "bg", required, bgRatio);
+    if (!fix) return this.nearestInScale(bg, "bg", bgRatio);
     return {
       kind: "color",
       side: "fg",
@@ -412,13 +676,13 @@ class ModeChecker {
 
   /**
    * When a token is an alias into a scale, like {color.gray.500}, looks for the passing sibling
-   * (color.gray.*) closest in lightness to the current one.
+   * (color.gray.*) closest in lightness to the current one. `ratioOf` gives the ratio a candidate
+   * reaches, or undefined when it does not pass.
    */
   private nearestInScale(
     id: string,
     side: "fg" | "bg",
-    required: number,
-    ratioOf: (candidate: Rgba) => number,
+    ratioOf: (candidate: Rgba) => number | undefined,
     maxShift = Number.POSITIVE_INFINITY,
   ): Suggestion | undefined {
     const resolution = this.tokens.resolve(id);
@@ -436,7 +700,7 @@ class ModeChecker {
       const lookup = this.lookup(candidate);
       if (!lookup.ok) continue;
       const ratio = ratioOf(lookup.color.rgba);
-      if (ratio < required) continue;
+      if (ratio === undefined) continue;
       const distance = Math.abs(oklabLightness(lookup.color.rgba) - currentLightness);
       if (distance > maxShift) continue;
       if (!best || distance < best.distance) {
@@ -455,23 +719,38 @@ class ModeChecker {
     };
   }
 
-  private matchColors(patterns: readonly string[], rule: PairRule, side: "fg" | "bg"): string[] {
+  private matchColors(
+    patterns: readonly string[],
+    rule: PairRule,
+    side: "fg" | "bg",
+    gaps: Gap[],
+  ): string[] {
     const ids = new Set<string>();
     for (const pattern of patterns) {
       const matcher = compileTokenPattern(pattern);
+      const exact = !pattern.includes("*");
       let matched = 0;
       for (const id of this.tokens.ids()) {
         if (!matcher(id)) continue;
         const resolution = this.tokens.resolve(id);
         if (resolution.ok && resolution.type !== undefined && resolution.type !== "color") continue;
+        // A pattern also reaches untyped tokens like "color.text.size": 16px. Those are not
+        // colors, so they are skipped. An exact id, or a value that might be a broken color,
+        // is still checked and reported.
+        if (!exact && resolution.ok && resolution.type === undefined) {
+          if (clearlyNotColor(resolution.value)) continue;
+        }
         ids.add(id);
         matched++;
       }
       if (matched === 0) {
-        throw new InputError(
-          `"${pattern}" (${side}) matched no color tokens in mode "${this.mode.name}"`,
-          rule.location,
-        );
+        const where = `in mode "${this.mode.name}"`;
+        const message = !exact
+          ? `"${pattern}" (${side}) matched no color tokens ${where}`
+          : this.tokens.get(pattern)
+            ? `"${pattern}" (${side}) is not a color ${where}`
+            : `"${pattern}" (${side}) does not exist ${where}`;
+        gaps.push({ rule, side, pattern, exact, message });
       }
     }
     return [...ids].sort();

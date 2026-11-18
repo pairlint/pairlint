@@ -9,7 +9,7 @@ import {
 import { mapLinearRgbToSrgb, mapOklabToSrgb } from "./gamut.js";
 
 const HEX = /^#(?:[0-9a-f]{3,4}|[0-9a-f]{6}|[0-9a-f]{8})$/;
-const FUNCTION = /^([a-z-]+)\((.*)\)$/s;
+const FUNCTION = /^([a-z-]+)\((.*)\)$/is;
 const NUMBER = /^[+-]?(?:\d+\.?\d*|\.\d+)(?:e[+-]?\d+)?$/;
 const HUE = /^([+-]?(?:\d+\.?\d*|\.\d+)(?:e[+-]?\d+)?)(deg|grad|rad|turn)?$/;
 
@@ -26,16 +26,19 @@ export function parseColor(input: unknown): ParsedColor {
 }
 
 export function parseCssColor(input: string): ParsedColor {
-  const text = input.trim().toLowerCase();
+  const trimmed = input.trim();
+  const text = trimmed.toLowerCase();
   if (text.startsWith("#")) return parseHex(text, input);
   if (text === "transparent") return srgb([0, 0, 0], 0);
   if (text === "black") return srgb([0, 0, 0], 1);
   if (text === "white") return srgb([1, 1, 1], 1);
 
-  const match = FUNCTION.exec(text);
-  if (!match)
+  // Arguments keep their case so messages quote them as written. A value with more than one
+  // function, like a font shorthand "var(--weight) var(--size) / var(--line)", is not a color.
+  const match = FUNCTION.exec(trimmed);
+  if (!match || closingParen(trimmed) !== trimmed.length - 1)
     throw new ColorParseError(`"${input}" is not a color pairlint understands. ${SUPPORTED}`);
-  const name = match[1] ?? "";
+  const name = (match[1] ?? "").toLowerCase();
   const { values, alpha } = splitArguments(match[2] ?? "", input);
   const alphaValue = alpha === undefined ? 1 : parseAlpha(alpha, input);
 
@@ -82,7 +85,7 @@ export function parseCssColor(input: string): ParsedColor {
       expectCount(values, 4, input);
       const [space, ...rest] = values as [string, string, string, string];
       const components = rest.map((v) => parseNumberOrPercent(v, 1, input)) as Vec3;
-      return fromSpace(space, components, alphaValue, input);
+      return fromSpace(space.toLowerCase(), components, alphaValue, input);
     }
     default:
       throw new ColorParseError(
@@ -186,6 +189,16 @@ function parseHex(text: string, input: string): ParsedColor {
   return srgb([byte(0), byte(2), byte(4)], digits.length === 8 ? byte(6) : 1);
 }
 
+/** The index of the parenthesis that closes the first one opened, or -1. */
+function closingParen(text: string): number {
+  let depth = 0;
+  for (let index = 0; index < text.length; index++) {
+    if (text[index] === "(") depth++;
+    else if (text[index] === ")" && --depth === 0) return index;
+  }
+  return -1;
+}
+
 function splitArguments(body: string, input: string): { values: string[]; alpha?: string } {
   const trimmed = body.trim();
   if (trimmed.includes(",")) {
@@ -212,19 +225,20 @@ function expectCount(values: string[], count: number, input: string): void {
 }
 
 function parseNumberOrPercent(token: string, percentReference: number, input: string): number {
-  if (token === "none") return 0;
-  if (token.endsWith("%")) {
-    const number = token.slice(0, -1);
+  const value = token.toLowerCase();
+  if (value === "none") return 0;
+  if (value.endsWith("%")) {
+    const number = value.slice(0, -1);
     if (!NUMBER.test(number)) throw invalidValue(token, input);
     return (Number(number) / 100) * percentReference;
   }
-  if (!NUMBER.test(token)) throw invalidValue(token, input);
-  return Number(token);
+  if (!NUMBER.test(value)) throw invalidValue(token, input);
+  return Number(value);
 }
 
 function parseHue(token: string, input: string): number {
-  if (token === "none") return 0;
-  const match = HUE.exec(token);
+  if (token.toLowerCase() === "none") return 0;
+  const match = HUE.exec(token.toLowerCase());
   if (!match) throw invalidValue(token, input);
   const value = Number(match[1]);
   switch (match[2]) {

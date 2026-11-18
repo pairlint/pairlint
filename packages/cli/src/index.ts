@@ -14,6 +14,7 @@ export {
 export {
   type CheckOptions,
   type CheckReport,
+  clearlyNotColor,
   type Explanation,
   exitCode,
   explainPair,

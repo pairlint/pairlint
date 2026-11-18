@@ -5,11 +5,11 @@ light
 dark
   ✗ color.text.secondary on color.surface.overlay
     3.66:1 (#80868b on #2e2e2e), needs 4.5:1 for body text (WCAG 1.4.3 AA)
-    Try: point color.text.secondary at {color.gray.400} (5.11:1)
+    Try: point color.text.secondary at {color.gray.400} (5.11:1, passes on all 3 of its backgrounds)
     tokens/dark.json:6:7
   ✗ color.text.secondary on color.surface.raised
     4.37:1 (#80868b on #202124), needs 4.5:1 for body text (WCAG 1.4.3 AA)
-    Try: point color.text.secondary at {color.gray.400} (6.09:1)
+    Try: point color.text.secondary at {color.gray.400} (6.09:1, passes on all 3 of its backgrounds)
     Baseline entry expired on 2026-05-01 (owner @ashley: Waiting on the new gray ramp)
     tokens/dark.json:6:7
   ✓ 8 pairs pass
