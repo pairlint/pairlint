@@ -1,4 +1,4 @@
-import { type CheckReport, type PairResult, sortResults } from "./check.js";
+import { type CheckReport, type Explanation, type PairResult, sortResults } from "./check.js";
 
 export const JSON_SCHEMA_VERSION = 1;
 
@@ -21,4 +21,8 @@ export function formatJson(report: CheckReport): string {
     warnings: report.warnings,
   };
   return `${JSON.stringify(output, null, 2)}\n`;
+}
+
+export function formatExplainJson(explanations: readonly Explanation[]): string {
+  return `${JSON.stringify({ schemaVersion: JSON_SCHEMA_VERSION, explanations }, null, 2)}\n`;
 }

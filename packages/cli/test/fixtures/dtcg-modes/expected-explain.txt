@@ -1,0 +1,18 @@
+color.text.secondary on color.surface.raised (light)
+  ✓ 5.73:1 (#5f6368 on #f8f9fa), needs 4.5:1 for body text (WCAG 1.4.3 AA)
+  foreground  color.text.secondary → color.gray.700
+              #5f6368  tokens/light.json:6:7
+  background  color.surface.raised → color.gray.50
+              #f8f9fa  tokens/light.json:12:7
+  base        #ffffff
+  blended     #5f6368 on #f8f9fa
+
+color.text.secondary on color.surface.raised (dark)
+  ✗ 4.37:1 (#80868b on #202124), needs 4.5:1 for body text (WCAG 1.4.3 AA)
+  foreground  color.text.secondary → color.gray.500
+              #80868b  tokens/dark.json:6:7
+  background  color.surface.raised → color.gray.900
+              #202124  tokens/dark.json:12:7
+  base        #121212
+  blended     #80868b on #202124
+  Try: point color.text.secondary at {color.gray.400} (6.09:1)

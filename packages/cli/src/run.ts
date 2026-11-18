@@ -2,11 +2,12 @@ import { existsSync, readFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { parseArgs } from "node:util";
 import type { WcagLevel } from "@pairlint/contrast";
-import { exitCode, runCheck } from "./check.js";
+import { exitCode, explainPair, runCheck } from "./check.js";
 import { CONFIG_FILE, parseConfig } from "./config.js";
 import { InputError } from "./errors.js";
 import { createFileReader, MAX_FILE_BYTES, toDisplayPath } from "./files.js";
-import { formatJson } from "./report-json.js";
+import { formatExplainText } from "./report-explain.js";
+import { formatExplainJson, formatJson } from "./report-json.js";
 import { formatLocation, formatText } from "./report-text.js";
 
 export interface RunContext {
@@ -21,9 +22,9 @@ export interface RunContext {
 
 export const ISSUES_URL = "https://github.com/pairlint/pairlint/issues";
 
-const HELP = `Usage: pairlint [check] [options]
-
-Checks WCAG contrast for every token pair in your pairlint.config.json.
+const HELP = `Usage
+  pairlint [check] [options]       Check every pair in pairlint.config.json
+  pairlint explain <fg> <bg>       Show how one pair's result was worked out
 
 Options
   -c, --config <path>   Config file (default: ./${CONFIG_FILE})
@@ -86,7 +87,14 @@ function runOrThrow(context: RunContext): number {
     context.stdout(`${context.version}\n`);
     return 0;
   }
-  if (positionals.length > 1 || (positionals.length === 1 && positionals[0] !== "check")) {
+  const command = positionals[0] ?? "check";
+  if (command === "explain") {
+    if (positionals.length !== 3) {
+      throw new InputError(
+        'explain needs a foreground and a background token, like "pairlint explain color.text.muted color.surface.base"',
+      );
+    }
+  } else if (command !== "check" || positionals.length > 1) {
     throw new InputError(`Unknown command "${positionals.join(" ")}". Run "pairlint --help".`);
   }
 
@@ -126,10 +134,21 @@ function runOrThrow(context: RunContext): number {
     }
   }
 
-  const report = runCheck(config, createFileReader(dirname(configPath)), {
-    ...(level ? { level } : {}),
-    ...(modes ? { modes } : {}),
-  });
+  const options = { ...(level ? { level } : {}), ...(modes ? { modes } : {}) };
+  const readFile = createFileReader(dirname(configPath));
+
+  if (command === "explain") {
+    const [, fg, bg] = positionals as [string, string, string];
+    const explanations = explainPair(config, readFile, fg, bg, options);
+    context.stdout(
+      format === "json"
+        ? formatExplainJson(explanations)
+        : formatExplainText(explanations, useColor(values, context)),
+    );
+    return exitCode({ results: explanations.map((explanation) => explanation.result) });
+  }
+
+  const report = runCheck(config, readFile, options);
 
   if (format === "json") {
     context.stdout(formatJson(report));

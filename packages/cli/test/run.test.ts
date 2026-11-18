@@ -65,7 +65,7 @@ describe("pairlint options", () => {
   const cwd = fixture("dtcg-modes");
 
   it("prints help and version", () => {
-    expect(runCli(["--help"], { cwd }).stdout).toContain("Usage: pairlint");
+    expect(runCli(["--help"], { cwd }).stdout).toContain("pairlint explain <fg> <bg>");
     expect(runCli(["-v"], { cwd })).toEqual({ code: 0, stdout: "0.0.0-test\n", stderr: "" });
   });
 
@@ -118,5 +118,32 @@ describe("pairlint options", () => {
     expect(code).toBe(3);
     expect(stderr).toContain("Please report it at https://github.com/pairlint/pairlint/issues");
     expect(stderr).toContain("stdout closed");
+  });
+});
+
+describe("pairlint explain", () => {
+  const cwd = fixture("dtcg-modes");
+
+  it("walks through one pair in every mode", async () => {
+    const result = runCli(["explain", "color.text.secondary", "color.surface.raised"], { cwd });
+    expect(result.code).toBe(1);
+    await expect(result.stdout).toMatchFileSnapshot("./fixtures/dtcg-modes/expected-explain.txt");
+  });
+
+  it("explains in JSON for one mode", () => {
+    const result = runCli(
+      ["explain", "color.text.secondary", "color.surface.raised", "-m", "light", "-f", "json"],
+      { cwd },
+    );
+    expect(result.code).toBe(0);
+    const output = JSON.parse(result.stdout);
+    expect(output.explanations).toHaveLength(1);
+    expect(output.explanations[0].fg.chain).toEqual(["color.text.secondary", "color.gray.700"]);
+  });
+
+  it("needs exactly two tokens", () => {
+    const result = runCli(["explain", "color.text.secondary"], { cwd });
+    expect(result.code).toBe(2);
+    expect(result.stderr).toContain("explain needs a foreground and a background token");
   });
 });

@@ -1,6 +1,6 @@
 import { formatRatio } from "@pairlint/contrast";
 import type { SourceLocation } from "@pairlint/tokens-core";
-import { type CheckReport, type PairResult, sortResults } from "./check.js";
+import { type CheckReport, type PairResult, type Suggestion, sortResults } from "./check.js";
 
 export interface TextOptions {
   color: boolean;
@@ -69,6 +69,8 @@ function problemLines(result: PairResult, paint: Painter): string[] {
     lines.push(`    Cannot check: ${result.message ?? "unknown problem"}`);
   } else {
     lines.push(`    ${ratioText(result)}, needs ${requirementText(result)}`);
+    if (result.suggestion)
+      lines.push(`    ${paint.cyan("Try:")} ${suggestionText(result.suggestion)}`);
   }
   const location = result.fgLocation ?? result.bgLocation;
   if (location) lines.push(`    ${paint.dim(formatLocation(location))}`);
@@ -84,16 +86,24 @@ function detailLines(result: PairResult, paint: Painter): string[] {
   return [`  ${paint.green("✓")} ${pairName(result)}  ${paint.dim(ratioText(result))}`];
 }
 
-function pairName(result: PairResult): string {
+export function pairName(result: PairResult): string {
   return `${result.fg} on ${result.bg}`;
 }
 
-function ratioText(result: PairResult): string {
+export function ratioText(result: PairResult): string {
   const ratio = formatRatio(result.ratio ?? 0, result.required);
   return `${ratio}:1 (${result.fgColor} on ${result.bgColor})`;
 }
 
-function requirementText(result: PairResult): string {
+export function suggestionText(suggestion: Suggestion): string {
+  const ratio = `${formatRatio(suggestion.ratio)}:1`;
+  if (suggestion.kind === "token") {
+    return `point ${suggestion.token} at ${suggestion.value} (${ratio})`;
+  }
+  return `set ${suggestion.token} to ${suggestion.value}, or ${suggestion.oklch} (${ratio})`;
+}
+
+export function requirementText(result: PairResult): string {
   const required = `${result.required}:1`;
   if (result.criterion === undefined) return `${required} (custom minimum)`;
   const label = USE_LABELS[result.use as keyof typeof USE_LABELS];
@@ -119,15 +129,16 @@ function summary(report: CheckReport, paint: Painter): string {
   return `${parts.join(", ")} across ${modes} ${modes === 1 ? "mode" : "modes"} (WCAG ${report.level})`;
 }
 
-interface Painter {
+export interface Painter {
   bold(text: string): string;
   dim(text: string): string;
   red(text: string): string;
   green(text: string): string;
   yellow(text: string): string;
+  cyan(text: string): string;
 }
 
-function painter(enabled: boolean): Painter {
+export function painter(enabled: boolean): Painter {
   const wrap = (open: number, close: number) => (text: string) =>
     enabled ? `\u001b[${open}m${text}\u001b[${close}m` : text;
   return {
@@ -136,5 +147,6 @@ function painter(enabled: boolean): Painter {
     red: wrap(31, 39),
     green: wrap(32, 39),
     yellow: wrap(33, 39),
+    cyan: wrap(36, 39),
   };
 }

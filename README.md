@@ -6,6 +6,7 @@ Check WCAG contrast for every text and background pair in your design tokens, in
 dark
   ✗ color.text.secondary on color.surface.raised
     4.37:1 (#80868b on #202124), needs 4.5:1 for body text (WCAG 1.4.3 AA)
+    Try: point color.text.secondary at {color.gray.400} (6.09:1)
     tokens/dark.json:6:7
   ✓ 11 pairs pass
 
@@ -16,7 +17,7 @@ dark
 - Checks every pair you describe in every mode: light, dark, brand, high contrast.
 - Handles translucent colors, OKLCH, OKLab and Display P3.
 - Compares exactly. 4.499:1 does not pass 4.5:1, and the report never rounds a failure up.
-- Points at the file, line and column of the token to fix.
+- Points at the file, line and column of the token to fix, and suggests the nearest shade that passes.
 - Zero runtime dependencies. No network access, no install scripts, works offline.
 
 ## Quick start
@@ -133,6 +134,7 @@ WCAG 2 contrast is defined in sRGB. Colors outside sRGB are brought in with the 
 
 ```
 pairlint [check] [options]
+pairlint explain <fg> <bg> [options]
 
   -c, --config <path>   Config file (default: ./pairlint.config.json)
   -f, --format <name>   text or json (default: text)
@@ -152,7 +154,35 @@ Color is on in terminals and off in pipes and CI logs. `NO_COLOR` and `FORCE_COL
 | 2         | The config or a token file has a problem |
 | 3         | pairlint hit a bug. Please report it.    |
 
-`--format json` prints a versioned report (`"schemaVersion": 1`) with every result, ratio, color and source location.
+`--format json` prints a versioned report (`"schemaVersion": 1`) with every result, ratio, color, suggestion and source location.
+
+### Fix suggestions
+
+For each failing pair, pairlint suggests the smallest change that passes:
+
+1. If the token is an alias into a scale, like `{color.gray.500}`, it suggests the nearest shade in that scale that passes, for example `{color.gray.400}`. Your design system stays intact.
+2. If no foreground shade works, it tries the background's scale.
+3. Otherwise it suggests a new value with only the OKLCH lightness changed, keeping hue, chroma and alpha. The value is checked after rounding to hex, so it really passes.
+
+### Explaining one pair
+
+```sh
+npx pairlint explain color.text.secondary color.surface.raised
+```
+
+```
+color.text.secondary on color.surface.raised (dark)
+  ✗ 4.37:1 (#80868b on #202124), needs 4.5:1 for body text (WCAG 1.4.3 AA)
+  foreground  color.text.secondary → color.gray.500
+              #80868b  tokens/dark.json:6:7
+  background  color.surface.raised → color.gray.900
+              #202124  tokens/dark.json:12:7
+  base        #121212
+  blended     #80868b on #202124
+  Try: point color.text.secondary at {color.gray.400} (6.09:1)
+```
+
+It shows every alias step, each token's own color, the base color, and the colors after blending. It works for any two tokens, even ones not in your pairs, which are then checked as body text. Add `--mode` to limit it to one mode, or `--format json` for scripts.
 
 ## GitHub Actions
 
@@ -181,7 +211,7 @@ Pin actions by commit SHA and pairlint by exact version, as shown, so nothing ch
 - **It is not a conformance claim.** Passing means your token pairs meet the WCAG 2.2 contrast ratios. A site also needs those tokens used in the right places, and much more.
 - **It cannot check gradients or images.** Only flat colors and translucent layers.
 - **It does not use APCA.** WCAG 3 has not settled on a contrast method. An informational APCA column may come later, but it will never fail a build on its own.
-- **Not yet:** Style Dictionary and CSS custom property inputs, SARIF and HTML reports, fix suggestions, and a Figma plugin. See the [roadmap](https://github.com/pairlint/pairlint/issues).
+- **Not yet:** Style Dictionary and CSS custom property inputs, SARIF and HTML reports, and a Figma plugin. See the [roadmap](https://github.com/pairlint/pairlint/issues).
 
 ## Security
 
