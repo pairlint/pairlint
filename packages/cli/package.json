@@ -47,7 +47,7 @@
     "@pairlint/tokens-core": "0.1.0"
   },
   "scripts": {
-    "build": "tsc -p tsconfig.json"
+    "build": "tsc -p tsconfig.json --removeComments && tsc -p tsconfig.json --emitDeclarationOnly"
   },
   "publishConfig": {
     "access": "public",

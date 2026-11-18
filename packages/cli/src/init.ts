@@ -13,16 +13,17 @@ import {
   TokenFileError,
 } from "@pairlint/tokens-core";
 import { MAX_FILE_BYTES, toDisplayPath } from "./files.js";
+import {
+  expandModes,
+  type FoundSource,
+  isDarkName,
+  type ModePlan,
+  planFromStudioThemes,
+  planModes,
+  themeOf,
+} from "./init-modes.js";
 
-/** A token file or one part of it (a Tokens Studio set or a CSS selection) that has colors. */
-export interface FoundSource {
-  /** Config entry, like "tokens/dark.json" or "theme.css#[data-theme=\"dark\"]". */
-  entry: string;
-  /** The theme this part belongs to, like "dark", or undefined when every mode shares it. */
-  theme: string | undefined;
-  /** Color token ids. */
-  colors: string[];
-}
+export { type FoundSource, themeOf } from "./init-modes.js";
 
 export interface InferredPair {
   fg: string[];
@@ -45,17 +46,14 @@ export interface InferredConfig {
   unpaired: string[];
   /** Pairs checked in each mode, not counting exempt ones. */
   pairCount: number;
+  /** Shared files and the axes modes combine from, for writing groups. */
+  plan: ModePlan;
+  /** Whether the modes came from a Tokens Studio $themes.json. */
+  fromThemesFile: boolean;
+  /** The page background translucent colors sit on in dark modes, like "color.bg.canvas". */
+  canvas: string | undefined;
 }
 
-const THEME_ORDER = [
-  "light",
-  "dark",
-  "dim",
-  "high-contrast",
-  "light-high-contrast",
-  "dark-high-contrast",
-];
-const HIGH_CONTRAST = "-high-contrast";
 const MAX_LISTED = 12;
 const NOT_TEXT_WORDS = ["shadow", "elevation", "gradient", "scrim", "overlay", "backdrop"];
 const MAX_SCAN_DEPTH = 6;
@@ -118,24 +116,9 @@ export function inferConfig(files: readonly SourceFile[]): InferredConfig {
     for (const source of readSources(file, skipped, lookup)) sources.push(source);
   }
 
-  const themes = [...new Set(sources.map((s) => s.theme).filter((t) => t !== undefined))];
-  const shared = sources.filter((s) => s.theme === undefined).map((s) => s.entry);
-  const entriesFor = (theme: string) =>
-    sources.filter((s) => s.theme === theme).map((s) => s.entry);
-  const modes =
-    themes.length === 0
-      ? [{ name: "default", sources: shared }]
-      : orderThemes(themes).map((name) => {
-          // A high contrast variant usually overrides only some tokens of its base theme, so it
-          // loads that theme's files first.
-          const base = name.endsWith(HIGH_CONTRAST) ? name.slice(0, -HIGH_CONTRAST.length) : "";
-          const inherited = themes.includes(base) ? entriesFor(base) : [];
-          return { name, sources: [...shared, ...inherited, ...entriesFor(name)] };
-        });
-  // A theme found only as an override (dark.json) still needs a mode for the shared files.
-  if (themes.length > 0 && !themes.includes("light") && shared.length > 0) {
-    modes.unshift({ name: "light", sources: shared });
-  }
+  const studio = planFromStudioThemes(files, sources);
+  const plan = studio ?? planModes(sources);
+  const modes = expandModes(plan);
 
   const colors = [...new Set(sources.flatMap((s) => s.colors))].sort();
   // Untyped tokens that are not colors, like "text.body.size": 16px. The check matches them too,
@@ -144,9 +127,12 @@ export function inferConfig(files: readonly SourceFile[]): InferredConfig {
   for (const token of lookup.values()) {
     if (kindOf(token, lookup) === "untyped") others.add(token.id);
   }
-  const { pairs, guessed, unpaired, pairCount } = inferPairs(colors, others);
+  const { pairs, guessed, unpaired, pairCount, canvas } = inferPairs(colors, others);
   return {
-    modes: modes.filter((mode) => mode.sources.length > 0),
+    modes,
+    plan,
+    fromThemesFile: studio !== undefined,
+    canvas: modes.some((mode) => isDarkName(mode.name)) ? canvas : undefined,
     pairs,
     guessed,
     unpaired,
@@ -276,14 +262,23 @@ function colorIds(read: () => Token[], lookup: ReadonlyMap<string, Token>): stri
 
 /**
  * "color" for a color, "typed" for a token with another $type, and "untyped" for an untyped
- * token that is not a color, like a Style Dictionary font size. Aliases are followed, so
- * "button.font-family": "{typography.font-family}" is not a color.
+ * token that is not a color, like a Style Dictionary font size, or a value the check cannot read.
+ * Aliases are followed, so "button.font-family": "{typography.font-family}" is not a color.
  */
 function kindOf(token: Token, lookup: ReadonlyMap<string, Token>): "color" | "typed" | "untyped" {
   let current = token;
   for (let depth = 0; depth <= MAX_ALIAS_DEPTH; depth++) {
-    if (current.type !== undefined) return current.type === "color" ? "color" : "typed";
     const target = aliasTarget(current.value);
+    // "rgba({color.black}, {opacity.12})" mixes references with other text, which the check
+    // cannot resolve yet. It counts as untyped so no pattern covers it.
+    if (
+      target === undefined &&
+      typeof current.value === "string" &&
+      /\{[^{}]+\}/.test(current.value)
+    ) {
+      return "untyped";
+    }
+    if (current.type !== undefined) return current.type === "color" ? "color" : "typed";
     if (target === undefined) return parsesAsColor(current.value) ? "color" : "untyped";
     const next = lookup.get(target);
     // A missing target is reported by the check. Most aliases point at palette colors.
@@ -303,31 +298,11 @@ function parsesAsColor(value: unknown): boolean {
   }
 }
 
-/** "dark" from "dark.json", "[data-theme=dark]" or "@media (prefers-color-scheme: dark)". */
-export function themeOf(label: string): string | undefined {
-  // Attribute names like data-light-theme say nothing about the theme. Their values do.
-  const text = label.replace(/\[\s*[\w-]+\s*(?=[~|^$*]?=|\])/g, "[").toLowerCase();
-  const words = text.split(/[^a-z0-9]+/);
-  const base = ["light", "dark", "dim"].find((word) => words.includes(word));
-  if (words.includes("hc") || words.includes("contrast") || words.includes("highcontrast")) {
-    // Light and dark high contrast are different themes, so they stay apart.
-    return base === "light" || base === "dark" ? `${base}${HIGH_CONTRAST}` : "high-contrast";
-  }
-  return base;
-}
-
-function orderThemes(themes: string[]): string[] {
-  return [...themes].sort((a, b) => rank(a) - rank(b) || (a < b ? -1 : 1));
-}
-
-function rank(theme: string): number {
-  const index = THEME_ORDER.indexOf(theme);
-  return index === -1 ? THEME_ORDER.length : index;
-}
-
 type Role = "fg" | "bg" | "ui" | "on" | "disabled";
 
-const ROLE_WORDS: Record<"fg" | "bg" | "ui", readonly string[]> = {
+type RoleWords = Record<"fg" | "bg" | "ui", readonly string[]>;
+
+const ROLE_WORDS: RoleWords = {
   fg: [
     "text",
     "font",
@@ -344,6 +319,33 @@ const ROLE_WORDS: Record<"fg" | "bg" | "ui", readonly string[]> = {
   bg: ["bg", "background", "surface", "canvas", "page", "backdrop", "container", "layer", "fill"],
   ui: ["border", "outline", "stroke", "divider", "separator", "ring", "focus"],
 };
+
+/**
+ * When a system also has "text" tokens, its "foreground" tokens are raised layers, the way Calcite
+ * uses color.foreground.1 for a panel on color.background. They are backgrounds then.
+ */
+const LAYER_ROLE_WORDS: RoleWords = {
+  fg: ROLE_WORDS.fg.filter((word) => word !== "foreground"),
+  bg: [...ROLE_WORDS.bg, "foreground"],
+  ui: ROLE_WORDS.ui,
+};
+/** Borders that only decorate, which WCAG 1.4.11 does not ask to reach 3:1. */
+const DECORATIVE_WORDS = ["divider", "separator", "subtle"];
+/** Words that say nothing about which fill an on- color belongs on. */
+const PLAIN_WORDS = new Set([
+  "on",
+  "color",
+  "colour",
+  "primary",
+  "secondary",
+  "tertiary",
+  "default",
+  "base",
+  "subtle",
+  "muted",
+  "strong",
+  "weak",
+]);
 
 /** Backgrounds with these words are strong fills. Only their on- colors are checked on them. */
 const FILL_WORDS = ["emphasis", "solid", "strong", "bold", "inverse", "inverted"];
@@ -436,14 +438,14 @@ interface Classified {
   after: string[];
 }
 
-function classify(id: string): Classified {
+function classify(id: string, roleWords: RoleWords = ROLE_WORDS): Classified {
   const words = wordsOf(id);
   let base: "fg" | "bg" | "ui" | undefined;
   for (let i = words.length - 1; i >= 0 && base === undefined; i--) {
     const word = words[i] ?? "";
-    base = (["fg", "bg", "ui"] as const).find((role) => ROLE_WORDS[role].includes(word));
+    base = (["fg", "bg", "ui"] as const).find((role) => roleWords[role].includes(word));
   }
-  let [scopeEnd, roleEnd] = base === undefined ? [-1, -1] : roleRunOf(words, base);
+  let [scopeEnd, roleEnd] = base === undefined ? [-1, -1] : roleRunOf(words, base, roleWords);
   // Named after the CSS property, like "button.color" next to "button.background-color". A
   // shadow's or gradient's color is not text, though.
   if (
@@ -462,6 +464,10 @@ function classify(id: string): Classified {
     return { role: base === "bg" ? undefined : "disabled", scope, after };
   }
   if (words.includes("on")) return { role: "on", scope, after };
+  // Inverse text belongs on inverse backgrounds, the way an on- color belongs on its fill.
+  if (base === "fg" && (words.includes("inverse") || words.includes("inverted"))) {
+    return { role: "on", scope, after };
+  }
   return { role: base, scope, after };
 }
 
@@ -470,13 +476,17 @@ function classify(id: string): Classified {
  * "label-red-fgColor" is in "label.red" and "color.bg.canvas.default" in "color". "fill" is
  * skipped, since in "Bg.Danger.Fill Muted" it describes the background rather than starting it.
  */
-function roleRunOf(words: string[], base: "fg" | "bg" | "ui"): [number, number] {
+function roleRunOf(
+  words: string[],
+  base: "fg" | "bg" | "ui",
+  roleWords: RoleWords = ROLE_WORDS,
+): [number, number] {
   const isRole = (word: string | undefined) =>
-    word !== undefined && word !== "fill" && ROLE_WORDS[base].includes(word);
+    word !== undefined && word !== "fill" && roleWords[base].includes(word);
   let end = words.length - 1;
   while (end >= 0 && !isRole(words[end])) end--;
   if (end < 0) {
-    const index = words.findIndex((word) => ROLE_WORDS[base].includes(word));
+    const index = words.findIndex((word) => roleWords[base].includes(word));
     return [index, index];
   }
   let start = end;
@@ -485,7 +495,7 @@ function roleRunOf(words: string[], base: "fg" | "bg" | "ui"): [number, number] 
   // still one run. A color name is not enough, since "label-gray-fgColor" is the gray label's text.
   for (let i = start - 1; i >= 0; i--) {
     const word = words[i] ?? "";
-    if (ROLE_WORDS[base].includes(word)) start = i;
+    if (roleWords[base].includes(word)) start = i;
     else if (!INTENT_WORDS.includes(word) && !STATE_WORDS.includes(word) && word !== "neutral") {
       break;
     }
@@ -592,6 +602,8 @@ interface PairInference {
   unpaired: string[];
   /** Pairs checked in each mode, not counting exempt ones. */
   pairCount: number;
+  /** The page background, for the base color of dark modes. */
+  canvas: string | undefined;
 }
 
 /**
@@ -601,7 +613,9 @@ interface PairInference {
  * (hover text on a pressed background) are not paired, and strong fills only get their on- colors.
  */
 function inferPairs(colors: string[], others: ReadonlySet<string>): PairInference {
-  const classified = new Map(colors.map((id) => [id, classify(id)]));
+  const has = (word: string) => colors.some((id) => wordsOf(id).includes(word));
+  const roleWords = has("text") && has("foreground") ? LAYER_ROLE_WORDS : ROLE_WORDS;
+  const classified = new Map(colors.map((id) => [id, classify(id, roleWords)]));
   const roleOfId = (id: string) => classified.get(id)?.role;
   const ids = (role: Role) => colors.filter((id) => roleOfId(id) === role);
   const components = sharedComponents(colors, classified);
@@ -610,15 +624,17 @@ function inferPairs(colors: string[], others: ReadonlySet<string>): PairInferenc
   );
   const facet = (id: string) => facets.get(id) as Facets;
 
-  const named = new Map(ids("on").map((id) => [id, fillsFor(id, colors, roleOfId, facet)]));
+  const named = new Map(ids("on").map((id) => [id, fillsFor(id, colors, roleOfId)]));
   // An on- color whose fill has no name of its own, like "on-solid" when no background says
-  // "solid", sits on the backgrounds marked primary and their states.
-  const unnamed = [...named.values()].some((found) => found.length === 0);
+  // "solid", sits on the backgrounds marked primary and their states. Inverse text does not: it
+  // only goes on inverse backgrounds.
+  const fallsBack = (id: string) => wordsOf(id).includes("on");
+  const unnamed = [...named].some(([id, found]) => found.length === 0 && fallsBack(id));
   const primary = unnamed ? primaryFills(ids("bg"), classified) : [];
   const onFills = new Map(
     [...named].map(([id, found]) => [
       id,
-      found.length > 0 ? found : sameIntentFirst(id, primary, facet),
+      sharedWordsFirst(id, found.length > 0 || !fallsBack(id) ? found : primary),
     ]),
   );
   const fillIds = new Set([
@@ -633,6 +649,7 @@ function inferPairs(colors: string[], others: ReadonlySet<string>): PairInferenc
       guessed: true,
       unpaired: [],
       pairCount: 0,
+      canvas: undefined,
     };
   }
 
@@ -674,7 +691,12 @@ function inferPairs(colors: string[], others: ReadonlySet<string>): PairInferenc
   const edges = (fgIds: string[], find: (id: string) => string[]) =>
     new Map(fgIds.map((id) => [id, find(id)] as const));
   const text = edges(ids("fg"), surfacesFor);
-  const ui = edges(ids("ui"), surfacesFor);
+  const isDecorative = (id: string) => wordsOf(id).some((word) => DECORATIVE_WORDS.includes(word));
+  const ui = edges(
+    ids("ui").filter((id) => !isDecorative(id)),
+    surfacesFor,
+  );
+  const decorative = edges(ids("ui").filter(isDecorative), surfacesFor);
   const on = edges(ids("on"), (id) => onFills.get(id) ?? []);
   const disabled = edges(ids("disabled"), (id) => {
     const found = surfacesFor(id);
@@ -682,10 +704,16 @@ function inferPairs(colors: string[], others: ReadonlySet<string>): PairInferenc
   });
 
   const blocked = blockedPatterns(others);
+  const exempted = new Map([...disabled, ...decorative]);
   const pairs = [
-    ...groupRules(text, colors, blocked, {}, disabled),
-    ...groupRules(ui, colors, blocked, { use: "ui" }, disabled),
+    ...groupRules(text, colors, blocked, {}, exempted),
+    ...groupRules(ui, colors, blocked, { use: "ui" }, exempted),
     ...groupRules(on, colors, blocked, {}),
+    ...groupRules(decorative, colors, blocked, {
+      use: "exempt",
+      reason:
+        "Decorative borders and dividers do not need 3:1. WCAG 1.4.11 covers borders that identify a control",
+    }),
     ...groupRules(disabled, colors, blocked, {
       use: "exempt",
       reason: "WCAG 1.4.3 does not apply to disabled controls",
@@ -693,9 +721,11 @@ function inferPairs(colors: string[], others: ReadonlySet<string>): PairInferenc
   ];
 
   const usedFills = new Set([...on.values()].flat());
-  const usedSurfaces = new Set([...text.values(), ...ui.values()].flat());
+  const usedSurfaces = new Set([...text.values(), ...ui.values(), ...decorative.values()].flat());
   const unpaired = [
-    ...[...text, ...ui, ...on].filter(([, bgs]) => bgs.length === 0).map(([id]) => id),
+    ...[...text, ...ui, ...on, ...decorative]
+      .filter(([, bgs]) => bgs.length === 0)
+      .map(([id]) => id),
     ...[...fillIds].filter((id) => !usedFills.has(id)),
     ...surfaces.filter((id) => !usedSurfaces.has(id)),
   ].sort();
@@ -703,7 +733,44 @@ function inferPairs(colors: string[], others: ReadonlySet<string>): PairInferenc
   for (const map of [text, ui, on]) {
     for (const bgs of map.values()) pairCount += bgs.length;
   }
-  return { pairs, guessed: false, unpaired, pairCount };
+  return { pairs, guessed: false, unpaired, pairCount, canvas: canvasOf(surfaces, facet) };
+}
+
+/**
+ * The page background, like "color.bg.canvas.default", "Bg.Neutral.Canvas",
+ * "utrecht.document.background-color" or "bgColor-default". Undefined when no name says so.
+ */
+function canvasOf(surfaces: string[], facet: (id: string) => Facets): string | undefined {
+  let best: string | undefined;
+  let bestScore = 0;
+  for (const id of surfaces) {
+    const own = facet(id);
+    if (own.intent !== undefined || own.state !== undefined || own.inverse) continue;
+    const words = wordsOf(id);
+    if (words.some((word) => LIGHT_WORDS.includes(word) && word !== "default" && word !== "base")) {
+      continue;
+    }
+    if (words.some((word) => /^\d+$/.test(word))) continue;
+    // A page word names the page only at the end of the scope or after the role word:
+    // "utrecht.document.background-color" and "color.bg.page", not "page-header-bgColor".
+    const scope = own.scope === "" ? [] : own.scope.split(".");
+    const names = (word: string) =>
+      words.includes(word) && (!scope.includes(word) || scope[scope.length - 1] === word);
+    let score = names("canvas") ? 3 : PAGE_WORDS.some(names) ? 2 : 0;
+    if (words.includes("default") || words.includes("base")) score += 1;
+    if (score === 0 && words.every((word) => ROLE_WORDS.bg.includes(word) || word === "color")) {
+      score = 1;
+    }
+    const better =
+      best === undefined ||
+      score > bestScore ||
+      (score === bestScore && wordsOf(best).length > words.length);
+    if (score > 0 && better) {
+      best = id;
+      bestScore = score;
+    }
+  }
+  return best;
 }
 
 /**
@@ -820,32 +887,40 @@ function compress(
 }
 
 /**
- * For "on-brand" or "color.on.primary", the fills named "brand" or "primary". When the on- color
- * has an intent, like "Text.Accent.Strong on emphasis", fills with the same intent win.
+ * For "on-brand" or "color.on.primary", the fills named "brand" or "primary". For inverse text,
+ * the inverse backgrounds.
  */
-function fillsFor(
-  id: string,
-  colors: string[],
-  roleOfId: (id: string) => Role | undefined,
-  facet: (id: string) => Facets,
-): string[] {
+function fillsFor(id: string, colors: string[], roleOfId: (id: string) => Role | undefined) {
   const words = wordsOf(id);
-  const name = words.slice(words.indexOf("on") + 1).join("-");
-  if (name === "") return [];
-  const matches = colors.filter((other) => {
+  const at = words.indexOf("on");
+  const inverse = at === -1;
+  const name = inverse ? "" : words.slice(at + 1).join("-");
+  if (!inverse && name === "") return [];
+  return colors.filter((other) => {
     const role = roleOfId(other);
     if (other === id || (role !== undefined && role !== "bg")) return false;
     const otherWords = wordsOf(other);
+    if (inverse) return otherWords.includes("inverse") || otherWords.includes("inverted");
     return otherWords.join("-").includes(name) && otherWords.includes(name.split("-")[0] ?? "");
   });
-  return sameIntentFirst(id, matches, facet);
 }
 
-/** The fills with the on- color's intent when there are any, otherwise all of them. */
-function sameIntentFirst(id: string, fills: string[], facet: (id: string) => Facets): string[] {
-  const intent = facet(id).intent;
-  const same = intent === undefined ? [] : fills.filter((fill) => facet(fill).intent === intent);
-  return same.length > 0 ? same : fills;
+/**
+ * The fills that share the most of the on- color's other words, so "Text.Accent.Strong on
+ * emphasis" goes on the Accent fills and "Text.Neutral.Subtle on emphasis" on the Neutral ones.
+ * Every fill when none shares a word.
+ */
+function sharedWordsFirst(id: string, fills: string[]): string[] {
+  const own = wordsOf(id).filter(
+    (word) =>
+      !PLAIN_WORDS.has(word) &&
+      !FILL_WORDS.includes(word) &&
+      !STATE_WORDS.includes(word) &&
+      !Object.values(ROLE_WORDS).some((list) => list.includes(word)),
+  );
+  const score = (fill: string) => wordsOf(fill).filter((word) => own.includes(word)).length;
+  const best = Math.max(0, ...fills.map(score));
+  return best === 0 ? fills : fills.filter((fill) => score(fill) === best);
 }
 
 /**
@@ -888,11 +963,38 @@ export function renderConfig(config: InferredConfig, schemaPath: string): string
   lines.push(
     `  // Found ${config.colorCount} color tokens in ${config.fileCount} ${config.fileCount === 1 ? "file" : "files"}.`,
   );
+  const { axes, shared } = config.plan;
+  const grouped =
+    axes.length > 1 && axes.every((axis) => axis.values.every((value) => value.sources.length > 0));
+  let darkKeys = config.modes.map((mode) => mode.name).filter(isDarkName);
   if (config.modes.length === 1 && config.modes[0]?.name === "default") {
     lines.push(`  "tokens": ${inline(config.modes[0].sources)},`);
+  } else if (grouped) {
+    lines.push(
+      `  // ${config.modes.length} ${modeWord}: ${axes.map((axis) => `${axis.values.length} ${axis.name}`).join(" × ")}.`,
+    );
+    if (axes.some((axis) => axis.kind === "brand")) {
+      lines.push("  // Each brand is a folder that defines the same tokens as its siblings.");
+    }
+    if (shared.length > 0) lines.push(`  "tokens": ${inline(shared)},`);
+    lines.push('  "modes": {');
+    axes.forEach((axis, axisIndex) => {
+      lines.push(`    ${JSON.stringify(axis.name)}: {`);
+      axis.values.forEach((value, index) => {
+        const comma = index < axis.values.length - 1 ? "," : "";
+        lines.push(`      ${JSON.stringify(value.name)}: ${inline(value.sources)}${comma}`);
+      });
+      lines.push(`    }${axisIndex < axes.length - 1 ? "," : ""}`);
+    });
+    lines.push("  },");
+    darkKeys = [
+      ...new Set(axes.flatMap((axis) => axis.values.map((value) => value.name).filter(isDarkName))),
+    ];
   } else {
     lines.push(
-      `  // ${config.modes.length} ${modeWord}, named after the themes in your file names and selectors.`,
+      config.fromThemesFile
+        ? `  // ${config.modes.length} ${modeWord}, from the themes in $themes.json.`
+        : `  // ${config.modes.length} ${modeWord}, named after the themes in your file names and selectors.`,
     );
     lines.push('  "modes": {');
     config.modes.forEach((mode, index) => {
@@ -900,6 +1002,15 @@ export function renderConfig(config: InferredConfig, schemaPath: string): string
       lines.push(`    ${JSON.stringify(mode.name)}: ${inline(mode.sources)}${comma}`);
     });
     lines.push("  },");
+  }
+  if (config.canvas !== undefined && darkKeys.length > 0) {
+    const alias = JSON.stringify(`{${config.canvas}}`);
+    lines.push(
+      "  // Translucent backgrounds in dark modes sit on the page background, not on white.",
+    );
+    lines.push(
+      `  "base": { ${darkKeys.map((key) => `${JSON.stringify(key)}: ${alias}`).join(", ")} },`,
+    );
   }
   for (const entry of config.skipped) {
     lines.push(`  // Also has colors, but does not look like a theme: ${entry}`);

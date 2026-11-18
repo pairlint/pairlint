@@ -6,6 +6,8 @@
     "light": ["tokens/core.json", "tokens/light.json"],
     "dark": ["tokens/core.json", "tokens/dark.json"]
   },
+  // Translucent backgrounds in dark modes sit on the page background, not on white.
+  "base": { "dark": "{color.surface.base}" },
   // Pairs inferred from token names. Check that each one is a real combination in your UI.
   // Text and borders are paired with their own component's backgrounds, or else the shared
   // surfaces. Different intents and states are kept apart. About 12 pairs per mode.

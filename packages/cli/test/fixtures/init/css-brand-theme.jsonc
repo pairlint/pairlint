@@ -6,6 +6,8 @@
     "light": "theme.css",
     "dark": ["theme.css", "theme.css#[data-theme=\"dark\"]"]
   },
+  // Translucent backgrounds in dark modes sit on the page background, not on white.
+  "base": { "dark": "{surface}" },
   // Also has colors, but does not look like a theme: brands.css#.acme
   // Also has colors, but does not look like a theme: brands.css#.zen
   // Pairs inferred from token names. Check that each one is a real combination in your UI.
