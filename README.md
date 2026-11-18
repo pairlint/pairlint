@@ -16,7 +16,7 @@ dark
 1 failed, 23 passed across 2 modes (WCAG AA)
 ```
 
-- Reads W3C Design Tokens (DTCG), Tokens Studio, Style Dictionary and CSS custom properties, follows aliases, and merges several files per mode.
+- Reads the Design Tokens Community Group format (DTCG), Tokens Studio, Style Dictionary and CSS custom properties, follows aliases, and merges several files per mode.
 - Checks every pair you describe in every mode: light, dark, high contrast, and every brand × theme combination.
 - Handles translucent colors, OKLCH, OKLab and Display P3.
 - Compares exactly. 4.499:1 does not pass 4.5:1, and the report never rounds a failure up.
@@ -359,7 +359,7 @@ You can also export variables yourself: any DTCG file works, and `figma-variable
 
 ## What pairlint does not do
 
-- **It is not a conformance claim.** Passing means your token pairs meet the WCAG 2.2 contrast ratios. A site also needs those tokens used in the right places, and much more.
+- **It is not a conformance claim or an accessibility audit.** Passing means your token pairs meet the WCAG 2.2 contrast ratios. Contrast is one part of WCAG: a product also needs those tokens used in the right places, and much more. Do not describe a product as WCAG or ADA compliant because pairlint passes.
 - **It cannot check gradients or images.** Only flat colors and translucent layers.
 - **It does not use APCA.** WCAG 3 has not settled on a contrast method. An informational APCA column may come later, but it will never fail a build on its own.
 - **It does not read computed values in CSS.** `calc()`, `color-mix()`, `light-dark()` and relative colors are reported as values pairlint cannot parse, with the file and line.
@@ -380,6 +380,10 @@ pairlint reads files and prints a report. It has no runtime dependencies, makes 
 ## Contributing
 
 See [CONTRIBUTING.md](CONTRIBUTING.md). Please follow the [code of conduct](CODE_OF_CONDUCT.md).
+
+## Trademarks
+
+pairlint checks color contrast, which is one part of WCAG. Passing does not make a product accessible or WCAG conformant. pairlint is not affiliated with or endorsed by W3C, Figma or GitHub. WCAG is a W3C standard. Figma and GitHub are trademarks of their owners.
 
 ## License
 

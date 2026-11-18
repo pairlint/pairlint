@@ -2,7 +2,7 @@
 
 Reads design token files and gives you resolved tokens with their source positions. No dependencies.
 
-- W3C Design Tokens (DTCG), Tokens Studio and Style Dictionary formats, detected automatically
+- Design Tokens Community Group (DTCG), Tokens Studio and Style Dictionary formats, detected automatically
 - CSS custom properties from `:root`, a theme selector or a media query, with `var()` aliases and fallbacks
 - Group type inheritance, aliases with cycle detection, and Tokens Studio sets
 - Several files merged per mode, later files overriding earlier ones

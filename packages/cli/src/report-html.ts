@@ -114,7 +114,7 @@ export function formatHtml(report: CheckReport, options: HtmlOptions): string {
 <h1>Contrast report</h1>
 <p class="headline">${escapeHtml(headline)}</p>
 <p class="meta">${count("fail")} failed, ${count("pass")} passed, ${count("exempt")} exempt, ${count("baselined")} baselined, ${errors} could not be checked. WCAG ${report.level}, ${plural(report.modes.length, "mode", "modes")}.</p>
-<p class="note">Passing means these token pairs meet WCAG 2.2 contrast ratios. It is not a full accessibility audit.</p>
+<p class="note">Passing means these token pairs meet WCAG 2.2 contrast ratios. Contrast is one part of WCAG, so this is not an accessibility audit or a conformance claim.</p>
 </header>
 ${sections.join("\n")}
 ${warnings}
