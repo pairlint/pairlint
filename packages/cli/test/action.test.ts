@@ -27,6 +27,15 @@ describe("action.yml", () => {
     expect(script).not.toContain("${{");
   });
 
+  it("turns off bash -e, since GitHub runs the script with it and pairlint exits 1 on failures", () => {
+    const script = action.split("      run: |\n")[1] ?? "";
+    const firstCommand = script
+      .split("\n")
+      .map((line) => line.trim())
+      .find((line) => line !== "" && !line.startsWith("#"));
+    expect(firstCommand).toBe("set +e -uo pipefail");
+  });
+
   it("documents every input in the README", () => {
     const block = action.slice(action.indexOf("\ninputs:\n"), action.indexOf("\noutputs:\n"));
     const inputs = [...block.matchAll(/^ {2}([a-z-]+):$/gm)].map((match) => match[1]);
