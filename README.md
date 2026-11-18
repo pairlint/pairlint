@@ -30,7 +30,7 @@ npm install --save-dev pairlint
 npx pairlint init
 ```
 
-`init` looks through your project for token files and CSS custom properties and writes `pairlint.config.json`. It names modes after the themes it finds (`light.json`, `[data-theme=dark]`, `@media (prefers-color-scheme: dark)`) and guesses pairs from token names: `text` and `font` against `surface` and `background`, `border` as UI, `on-*` colors against their own fill, and disabled text exempt. Check that the pairs match your UI, then run:
+`init` looks through your project for token files and CSS custom properties and writes `pairlint.config.json`. It names modes after the themes it finds (`light.json`, `[data-theme=dark]`, `@media (prefers-color-scheme: dark)`) and guesses pairs from token names: `text`, `fg` and `color` against `surface`, `bg` and `background-color`, `border` as UI, `on-*` colors against their own fill, and disabled text exempt. Check that the pairs match your UI, then run:
 
 ```sh
 npx pairlint

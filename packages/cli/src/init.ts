@@ -6,6 +6,7 @@ import {
   compileTokenPattern,
   isCssPath,
   listCssContexts,
+  MAX_ALIAS_DEPTH,
   parseTokenFile,
   type SourceFile,
   type Token,
@@ -42,7 +43,16 @@ export interface InferredConfig {
   skipped: string[];
 }
 
-const THEME_WORDS = ["light", "dark", "dim", "high-contrast", "contrast", "hc"];
+const THEME_ORDER = [
+  "light",
+  "dark",
+  "dim",
+  "high-contrast",
+  "light-high-contrast",
+  "dark-high-contrast",
+];
+const HIGH_CONTRAST = "-high-contrast";
+const NOT_TEXT_WORDS = ["shadow", "elevation", "gradient", "scrim", "overlay", "backdrop"];
 const MAX_SCAN_DEPTH = 6;
 const MAX_FILES = 2000;
 const SKIP_DIRS = new Set([
@@ -96,28 +106,40 @@ export function findTokenFiles(root: string): SourceFile[] {
 
 /** Works out modes and pairs from token files. Files without color tokens are left out. */
 export function inferConfig(files: readonly SourceFile[]): InferredConfig {
+  const lookup = tokenLookup(files);
   const sources: FoundSource[] = [];
   const skipped: string[] = [];
   for (const file of files) {
-    for (const source of readSources(file, skipped)) sources.push(source);
+    for (const source of readSources(file, skipped, lookup)) sources.push(source);
   }
 
   const themes = [...new Set(sources.map((s) => s.theme).filter((t) => t !== undefined))];
   const shared = sources.filter((s) => s.theme === undefined).map((s) => s.entry);
+  const entriesFor = (theme: string) =>
+    sources.filter((s) => s.theme === theme).map((s) => s.entry);
   const modes =
     themes.length === 0
       ? [{ name: "default", sources: shared }]
-      : orderThemes(themes).map((name) => ({
-          name,
-          sources: [...shared, ...sources.filter((s) => s.theme === name).map((s) => s.entry)],
-        }));
+      : orderThemes(themes).map((name) => {
+          // A high contrast variant usually overrides only some tokens of its base theme, so it
+          // loads that theme's files first.
+          const base = name.endsWith(HIGH_CONTRAST) ? name.slice(0, -HIGH_CONTRAST.length) : "";
+          const inherited = themes.includes(base) ? entriesFor(base) : [];
+          return { name, sources: [...shared, ...inherited, ...entriesFor(name)] };
+        });
   // A theme found only as an override (dark.json) still needs a mode for the shared files.
   if (themes.length > 0 && !themes.includes("light") && shared.length > 0) {
     modes.unshift({ name: "light", sources: shared });
   }
 
   const colors = [...new Set(sources.flatMap((s) => s.colors))].sort();
-  const { pairs, guessed } = inferPairs(colors);
+  // Untyped tokens that are not colors, like "text.body.size": 16px. The check matches them too,
+  // so a pattern must not cover them.
+  const others = new Set<string>();
+  for (const token of lookup.values()) {
+    if (kindOf(token, lookup) === "untyped") others.add(token.id);
+  }
+  const { pairs, guessed } = inferPairs(colors, others);
   return {
     modes: modes.filter((mode) => mode.sources.length > 0),
     pairs,
@@ -128,7 +150,41 @@ export function inferConfig(files: readonly SourceFile[]): InferredConfig {
   };
 }
 
-function readSources(file: SourceFile, skipped: string[]): FoundSource[] {
+/**
+ * Every token in every file and CSS selection, by id, so init can follow an alias to see whether
+ * it ends at a color. Later definitions win, the way files in a mode merge.
+ */
+function tokenLookup(files: readonly SourceFile[]): Map<string, Token> {
+  const lookup = new Map<string, Token>();
+  for (const file of files) {
+    let contexts: (string | undefined)[] = [undefined];
+    if (isCssPath(file.path)) {
+      try {
+        contexts = listCssContexts(file);
+      } catch (error) {
+        if (error instanceof TokenFileError) continue;
+        throw error;
+      }
+    }
+    for (const context of contexts) {
+      try {
+        const options = context === undefined || context === ":root" ? {} : { set: context };
+        for (const token of parseTokenFile(file, options).tokens) {
+          lookup.set(token.id, token);
+        }
+      } catch (error) {
+        if (!(error instanceof TokenFileError)) throw error;
+      }
+    }
+  }
+  return lookup;
+}
+
+function readSources(
+  file: SourceFile,
+  skipped: string[],
+  lookup: ReadonlyMap<string, Token>,
+): FoundSource[] {
   if (isCssPath(file.path)) {
     let contexts: string[];
     try {
@@ -142,6 +198,7 @@ function readSources(file: SourceFile, skipped: string[]): FoundSource[] {
     for (const context of contexts) {
       const colors = colorIds(
         () => parseTokenFile(file, context === ":root" ? {} : { set: context }).tokens,
+        lookup,
       );
       if (colors.length === 0) continue;
       const theme = context === ":root" ? undefined : themeOf(context);
@@ -171,13 +228,13 @@ function readSources(file: SourceFile, skipped: string[]): FoundSource[] {
   const sets = studioSets(file);
   if (parsed.format === "tokens-studio" && sets.length > 0) {
     return sets.flatMap((set) => {
-      const colors = colorIds(() => parseTokenFile(file, { set }).tokens);
+      const colors = colorIds(() => parseTokenFile(file, { set }).tokens, lookup);
       return colors.length > 0
         ? [{ entry: `${file.path}#${set}`, theme: themeOf(set), colors }]
         : [];
     });
   }
-  const colors = colorIds(() => parsed.tokens);
+  const colors = colorIds(() => parsed.tokens, lookup);
   if (colors.length === 0) return [];
   const name =
     file.path
@@ -199,7 +256,7 @@ function studioSets(file: SourceFile): string[] {
   }
 }
 
-function colorIds(read: () => Token[]): string[] {
+function colorIds(read: () => Token[], lookup: ReadonlyMap<string, Token>): string[] {
   let tokens: Token[];
   try {
     tokens = read();
@@ -207,15 +264,31 @@ function colorIds(read: () => Token[]): string[] {
     if (error instanceof TokenFileError) return [];
     throw error;
   }
-  return tokens.filter(isColorToken).map((token) => token.id);
+  return tokens.filter((token) => kindOf(token, lookup) === "color").map((token) => token.id);
 }
 
-function isColorToken(token: Token): boolean {
-  if (token.type !== undefined) return token.type === "color";
-  // Untyped tokens (Style Dictionary, CSS): aliases count, since most point at palette colors.
-  if (aliasTarget(token.value) !== undefined) return true;
+/**
+ * "color" for a color, "typed" for a token with another $type, and "untyped" for an untyped
+ * token that is not a color, like a Style Dictionary font size. Aliases are followed, so
+ * "button.font-family": "{typography.font-family}" is not a color.
+ */
+function kindOf(token: Token, lookup: ReadonlyMap<string, Token>): "color" | "typed" | "untyped" {
+  let current = token;
+  for (let depth = 0; depth <= MAX_ALIAS_DEPTH; depth++) {
+    if (current.type !== undefined) return current.type === "color" ? "color" : "typed";
+    const target = aliasTarget(current.value);
+    if (target === undefined) return parsesAsColor(current.value) ? "color" : "untyped";
+    const next = lookup.get(target);
+    // A missing target is reported by the check. Most aliases point at palette colors.
+    if (!next) return "color";
+    current = next;
+  }
+  return "color";
+}
+
+function parsesAsColor(value: unknown): boolean {
   try {
-    parseColor(token.value);
+    parseColor(value);
     return true;
   } catch (error) {
     if (error instanceof ColorParseError) return false;
@@ -225,9 +298,15 @@ function isColorToken(token: Token): boolean {
 
 /** "dark" from "dark.json", "[data-theme=dark]" or "@media (prefers-color-scheme: dark)". */
 export function themeOf(label: string): string | undefined {
-  const words = label.toLowerCase().split(/[^a-z0-9]+/);
-  if (label.toLowerCase().includes("high-contrast") || words.includes("hc")) return "high-contrast";
-  return THEME_WORDS.find((word) => words.includes(word));
+  // Attribute names like data-light-theme say nothing about the theme. Their values do.
+  const text = label.replace(/\[\s*[\w-]+\s*(?=[~|^$*]?=|\])/g, "[").toLowerCase();
+  const words = text.split(/[^a-z0-9]+/);
+  const base = ["light", "dark", "dim"].find((word) => words.includes(word));
+  if (words.includes("hc") || words.includes("contrast") || words.includes("highcontrast")) {
+    // Light and dark high contrast are different themes, so they stay apart.
+    return base === "light" || base === "dark" ? `${base}${HIGH_CONTRAST}` : "high-contrast";
+  }
+  return base;
 }
 
 function orderThemes(themes: string[]): string[] {
@@ -235,8 +314,8 @@ function orderThemes(themes: string[]): string[] {
 }
 
 function rank(theme: string): number {
-  const index = THEME_WORDS.indexOf(theme);
-  return index === -1 ? THEME_WORDS.length : index;
+  const index = THEME_ORDER.indexOf(theme);
+  return index === -1 ? THEME_ORDER.length : index;
 }
 
 type Role = "fg" | "bg" | "ui" | "on" | "disabled";
@@ -259,21 +338,45 @@ const ROLE_WORDS: Record<"fg" | "bg" | "ui", readonly string[]> = {
   ui: ["border", "outline", "stroke", "divider", "separator", "ring", "focus"],
 };
 
-/** What a token is for, from the words in its name. The word nearest the end wins. */
-export function roleOf(id: string): Role | undefined {
-  const words = id.toLowerCase().split(/[.\-_]/);
-  if (words.includes("disabled")) return "disabled";
-  if (words.includes("on")) return "on";
-  for (let i = words.length - 1; i >= 0; i--) {
-    const word = words[i] ?? "";
-    for (const role of ["fg", "bg", "ui"] as const) {
-      if (ROLE_WORDS[role].includes(word)) return role;
-    }
-  }
-  return undefined;
+/**
+ * The lowercase words in a token id. Dots, dashes, underscores, spaces and camelCase all separate
+ * words, so "button-fgColor.Fill Muted" gives button, fg, color, fill and muted.
+ */
+function wordsOf(id: string): string[] {
+  return id
+    .replace(/([a-z0-9])([A-Z])/g, "$1-$2")
+    .toLowerCase()
+    .split(/[.\-_\s]+/)
+    .filter((word) => word !== "");
 }
 
-function inferPairs(colors: string[]): { pairs: InferredPair[]; guessed: boolean } {
+/** What a token is for, from the words in its name. The word nearest the end wins. */
+export function roleOf(id: string): Role | undefined {
+  const words = wordsOf(id);
+  let base: "fg" | "bg" | "ui" | undefined;
+  for (let i = words.length - 1; i >= 0 && base === undefined; i--) {
+    const word = words[i] ?? "";
+    base = (["fg", "bg", "ui"] as const).find((role) => ROLE_WORDS[role].includes(word));
+  }
+  // Named after the CSS property, like "button.color" next to "button.background-color". A
+  // shadow's or gradient's color is not text, though.
+  if (
+    base === undefined &&
+    id.split(".").pop()?.toLowerCase() === "color" &&
+    !words.some((word) => NOT_TEXT_WORDS.includes(word))
+  ) {
+    base = "fg";
+  }
+  // A disabled background is not text. It is left out instead of checked as a foreground.
+  if (words.includes("disabled")) return base === "bg" ? undefined : "disabled";
+  if (words.includes("on")) return "on";
+  return base;
+}
+
+function inferPairs(
+  colors: string[],
+  others: ReadonlySet<string>,
+): { pairs: InferredPair[]; guessed: boolean } {
   const roles = new Map(colors.map((id) => [id, roleOf(id)]));
   const ids = (wanted: Role[]) => colors.filter((id) => wanted.includes(roles.get(id) as Role));
 
@@ -281,15 +384,23 @@ function inferPairs(colors: string[]): { pairs: InferredPair[]; guessed: boolean
   const fills = new Map(ids(["on"]).map((id) => [id, fillsFor(id, colors, roles)]));
   const fillIds = new Set([...fills.values()].flat());
 
-  const fg = compress(ids(["fg", "on", "disabled"]), colors, roles, ["fg", "on", "disabled"]);
+  const blocked = blockedPatterns(others);
+  const fg = compress(
+    ids(["fg", "on", "disabled"]),
+    colors,
+    roles,
+    ["fg", "on", "disabled"],
+    blocked,
+  );
   const bg = compress(
     ids(["bg"]).filter((id) => !fillIds.has(id)),
     colors,
     roles,
     ["bg"],
+    blocked,
     fillIds,
   );
-  const ui = compress(ids(["ui"]), colors, roles, ["ui"]);
+  const ui = compress(ids(["ui"]), colors, roles, ["ui"], blocked);
   if (fg.length === 0 || bg.length === 0) {
     return {
       pairs: [{ fg: ["color.text.*"], bg: ["color.surface.*"] }],
@@ -330,11 +441,32 @@ function inferPairs(colors: string[]): { pairs: InferredPair[]; guessed: boolean
  * Turns ids into as few patterns as possible. "color.text.*" replaces its children only when every
  * color it would match has one of the allowed roles, so a pattern never pulls in other tokens.
  */
+/** Answers, once per pattern, whether it would also match one of `others`. */
+function blockedPatterns(others: ReadonlySet<string>): (pattern: string) => boolean {
+  const cache = new Map<string, boolean>();
+  return (pattern) => {
+    let blocked = cache.get(pattern);
+    if (blocked === undefined) {
+      const matcher = compileTokenPattern(pattern);
+      blocked = false;
+      for (const id of others) {
+        if (matcher(id)) {
+          blocked = true;
+          break;
+        }
+      }
+      cache.set(pattern, blocked);
+    }
+    return blocked;
+  };
+}
+
 function compress(
   ids: string[],
   colors: string[],
   roles: Map<string, Role | undefined>,
   allowed: Role[],
+  blocked: (pattern: string) => boolean,
   exclude: ReadonlySet<string> = new Set(),
 ): string[] {
   const patterns = new Set<string>();
@@ -347,7 +479,8 @@ function compress(
       const matches = colors.filter(compileTokenPattern(candidate));
       if (
         matches.length > 1 &&
-        matches.every((m) => allowed.includes(roles.get(m) as Role) && !exclude.has(m))
+        matches.every((m) => allowed.includes(roles.get(m) as Role) && !exclude.has(m)) &&
+        !blocked(candidate)
       ) {
         patterns.add(candidate);
         continue;
@@ -368,13 +501,13 @@ function compress(
 
 /** For "on-brand" or "color.on.primary", the fills named "brand" or "primary". */
 function fillsFor(id: string, colors: string[], roles: Map<string, Role | undefined>): string[] {
-  const words = id.toLowerCase().split(/[.\-_]/);
+  const words = wordsOf(id);
   const name = words.slice(words.indexOf("on") + 1).join("-");
   if (name === "") return [];
   return colors
     .filter((other) => {
       if (other === id || roles.get(other) === "on" || roles.get(other) === "fg") return false;
-      const otherWords = other.toLowerCase().split(/[.\-_]/);
+      const otherWords = wordsOf(other);
       return otherWords.join("-").includes(name) && otherWords.includes(name.split("-")[0] ?? "");
     })
     .slice(0, 5);

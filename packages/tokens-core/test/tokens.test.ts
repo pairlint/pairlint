@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  aliasTarget,
   MAX_ALIAS_DEPTH,
   parseTokenFile,
   type Token,
@@ -205,6 +206,20 @@ describe("TokenSet", () => {
       chain: ["color.link", "color.brand", "color.blue"],
     });
     if (resolution.ok) expect(resolution.token.id).toBe("color.link");
+  });
+
+  it("resolves aliases whose names contain spaces, as Figma variable exports write them", () => {
+    const tokens = set({
+      Light: { "Moss Green": { "7": { $type: "color", $value: "#007079" } } },
+      Border: { Accent: { $type: "color", $value: "{Light.Moss Green.7}" } },
+    });
+    expect(tokens.resolve("Border.Accent")).toMatchObject({ ok: true, value: "#007079" });
+  });
+
+  it("does not read a value with spaces around the name as an alias", () => {
+    expect(aliasTarget("{ color.blue }")).toBeUndefined();
+    expect(aliasTarget("{color.blue} {color.red}")).toBeUndefined();
+    expect(aliasTarget("{Moss Green.7}")).toBe("Moss Green.7");
   });
 
   it("takes the type from the alias target when the token has none", () => {

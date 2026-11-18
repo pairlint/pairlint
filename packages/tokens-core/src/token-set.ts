@@ -4,8 +4,10 @@ import { compileTokenPattern } from "./pattern.js";
 
 export const MAX_ALIAS_DEPTH = 32;
 
-const ALIAS = /^\{([^{}\s]+)\}$/;
-const EMBEDDED_ALIAS = /\{[^{}\s]+\}/;
+// Names may contain spaces, as Figma variable exports write them ("{Light.Moss Green.7}"), but
+// cannot start or end with one.
+const ALIAS = /^\{([^{}\s](?:[^{}]*[^{}\s])?)\}$/;
+const EMBEDDED_ALIAS = /\{[^{}\s](?:[^{}]*[^{}\s])?\}/;
 
 export type Resolution =
   | {
