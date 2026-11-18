@@ -52,10 +52,25 @@ export function formatMarkdown(report: CheckReport): string {
     lines.push("");
     lines.push("#### Could not be checked");
     lines.push("");
-    for (const result of errors.slice(0, MARKDOWN_ROW_LIMIT)) {
-      const where = result.fgLocation ?? result.bgLocation;
+    // One unreadable token breaks every pair it is in, so it is listed once per mode.
+    const grouped = new Map<string, { result: PairResult; count: number }>();
+    for (const result of errors) {
+      const key = `${result.mode}\u0000${result.errorToken ?? `${result.fg} on ${result.bg}`}\u0000${result.message ?? ""}`;
+      const entry = grouped.get(key);
+      if (entry) entry.count++;
+      else grouped.set(key, { result, count: 1 });
+    }
+    for (const { result, count } of [...grouped.values()].slice(0, MARKDOWN_ROW_LIMIT)) {
+      const where =
+        result.errorToken === result.bg
+          ? result.bgLocation
+          : (result.fgLocation ?? result.bgLocation);
+      const subject =
+        count > 1 && result.errorToken !== undefined
+          ? `${code(result.errorToken)} (affects ${count} pairs)`
+          : `${code(result.fg)} on ${code(result.bg)}`;
       lines.push(
-        `- ${result.mode}: ${code(result.fg)} on ${code(result.bg)}: ${escapeText(result.message ?? "unknown problem")}${
+        `- ${result.mode}: ${subject}: ${escapeText(result.message ?? "unknown problem")}${
           where ? ` (${code(formatLocation(where))})` : ""
         }`,
       );

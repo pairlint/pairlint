@@ -1,19 +1,19 @@
 default
   ✗ color.font.error on color.background.base
     3.99:1 (#ff0000 on #ffffff), needs 4.5:1 for body text (WCAG 1.4.3 AA)
-    Try: set color.font.error to #ee0000, or oklch(58.3% 0.258 29.2) (4.53:1)
+    Try: set color.font.error to #b20000, or oklch(46.6% 0.258 29.2) (7.25:1, passes on both of its backgrounds)
     tokens/color/font.json:6:7
   ✗ color.font.error on color.background.subtle
     2.48:1 (#ff0000 on #cccccc), needs 4.5:1 for body text (WCAG 1.4.3 AA)
-    Try: set color.font.error to #b20000, or oklch(46.6% 0.258 29.2) (4.52:1)
+    Try: set color.font.error to #b20000, or oklch(46.6% 0.258 29.2) (4.52:1, passes on both of its backgrounds)
     tokens/color/font.json:6:7
   ✗ color.font.secondary on color.background.subtle
     2.82:1 (#767676 on #cccccc), needs 4.5:1 for body text (WCAG 1.4.3 AA)
-    Try: point color.font.secondary at {color.base.gray.dark} (11.75:1)
+    Try: point color.font.secondary at {color.base.gray.dark} (11.75:1, passes on both of its backgrounds)
     tokens/color/font.json:5:7
   ✗ color.font.success on color.background.subtle
     2.82:1 (#008a00 on #cccccc), needs 4.5:1 for body text (WCAG 1.4.3 AA)
-    Try: set color.font.success to #006600, or oklch(43.6% 0.187 142.5) (4.50:1)
+    Try: set color.font.success to #006600, or oklch(43.6% 0.187 142.5) (4.50:1, passes on both of its backgrounds)
     tokens/color/font.json:7:7
   ✓ 4 pairs pass
 

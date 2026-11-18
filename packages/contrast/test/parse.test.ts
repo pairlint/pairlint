@@ -92,3 +92,20 @@ describe("parseColor with DTCG color objects", () => {
     expect(() => parseColor(input)).toThrow(message);
   });
 });
+
+describe("messages for values that are not one color", () => {
+  it("calls a shorthand of several values not a color, quoting it whole", () => {
+    const shorthand = "var(--Weight-Large) var(--Size-Large) / var(--Line-Height)";
+    expect(() => parseColor(shorthand)).toThrow(
+      `"${shorthand}" is not a color pairlint understands.`,
+    );
+  });
+
+  it("quotes a bad value with its original case", () => {
+    expect(() => parseColor("RGB(1 2 Three)")).toThrow(
+      '"Three" is not a valid value in "RGB(1 2 Three)"',
+    );
+    expect(parseColor("RGB(255 0 0)").rgba).toMatchObject({ r: 1, g: 0, b: 0 });
+    expect(parseColor("oklch(60% 0.1 120DEG)").rgba.alpha).toBe(1);
+  });
+});

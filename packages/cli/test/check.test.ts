@@ -1,7 +1,10 @@
 import { describe, expect, it } from "vitest";
 import {
+  clearlyNotColor,
   exitCode,
   explainPair,
+  formatMarkdown,
+  formatText,
   InputError,
   type PairResult,
   parseConfig,
@@ -374,5 +377,213 @@ describe("modes built from groups", () => {
       { modes: ["zen"] },
     );
     expect(report.modes).toEqual(["zen/light", "zen/dark"]);
+  });
+});
+
+describe("check output from real-world runs", () => {
+  const brands = (zwolle: Record<string, unknown>) => ({
+    "acme.json": JSON.stringify({
+      text: color("#111111"),
+      link: color("#0000ee"),
+      bg: color("#ffffff"),
+    }),
+    "zwolle.json": JSON.stringify(zwolle),
+  });
+  const brandConfig = {
+    modes: { brand: { acme: ["acme.json"], zwolle: ["zwolle.json"] } },
+    pairs: [{ fg: ["text", "link"], bg: "bg" }],
+  };
+
+  it("skips a token missing in some modes with one warning", () => {
+    const report = checkFiles(
+      brands({ text: color("#111111"), bg: color("#ffffff") }),
+      brandConfig,
+    );
+    expect(report.results.map((r) => `${r.mode} ${r.fg}`).sort()).toEqual([
+      "acme link",
+      "acme text",
+      "zwolle text",
+    ]);
+    expect(report.warnings).toEqual([
+      expect.objectContaining({
+        mode: "zwolle",
+        message:
+          '"link" (fg) does not exist in mode "zwolle", so pairs with it are skipped in this mode',
+      }),
+    ]);
+    expect(exitCode(report)).toBe(0);
+  });
+
+  it("lists the modes in one warning when a token is missing in several", () => {
+    const files = {
+      ...brands({ text: color("#111111"), bg: color("#ffffff") }),
+      "zen.json": JSON.stringify({ text: color("#111111"), bg: color("#ffffff") }),
+    };
+    const report = checkFiles(files, {
+      ...brandConfig,
+      modes: { brand: { acme: ["acme.json"], zwolle: ["zwolle.json"], zen: ["zen.json"] } },
+    });
+    expect(report.warnings).toHaveLength(1);
+    expect(report.warnings[0]).toMatchObject({
+      mode: "2 modes",
+      modes: ["zwolle", "zen"],
+      message:
+        '"link" (fg) does not exist in 2 of 3 modes (zwolle, zen), so pairs with it are skipped there',
+    });
+  });
+
+  it("is still an error when a token is missing in every mode", () => {
+    const files = brands({ text: color("#111111"), bg: color("#ffffff") });
+    expect(() =>
+      checkFiles(files, { ...brandConfig, pairs: [{ fg: "headline", bg: "bg" }] }),
+    ).toThrow('"headline" (fg) does not exist in any of the 2 modes');
+    expect(() => check({ bg: color("#fff") }, { pairs: [{ fg: "link", bg: "bg" }] })).toThrow(
+      '"link" (fg) does not exist in mode "default"',
+    );
+    expect(() =>
+      check(
+        { size: { $type: "dimension", $value: "4px" }, bg: color("#fff") },
+        { pairs: [{ fg: "size", bg: "bg" }] },
+      ),
+    ).toThrow('"size" (fg) is not a color in mode "default"');
+  });
+
+  it("skips wildcard matches that are clearly not colors", () => {
+    const report = check(
+      {
+        text: {
+          body: { value: "#111111" },
+          size: { value: "16px" },
+          family: { value: "Inter, system-ui, sans-serif" },
+          weight: { value: 700 },
+          font: { value: "var(--weight) var(--size) / var(--line-height)" },
+          broken: { value: "#12345" },
+        },
+        bg: { value: "#ffffff" },
+      },
+      { format: "style-dictionary", pairs: [{ fg: "text.*", bg: "bg" }] },
+    );
+    expect(report.results.map((r) => [r.fg, r.status])).toEqual([
+      ["text.body", "pass"],
+      ["text.broken", "error"],
+    ]);
+  });
+
+  it("still reports an exact id that is not a color", () => {
+    const report = check(
+      { text: { size: { value: "16px" } }, bg: { value: "#ffffff" } },
+      { format: "style-dictionary", pairs: [{ fg: "text.size", bg: "bg" }] },
+    );
+    expect(report.results[0]?.status).toBe("error");
+  });
+
+  it("tells clear non-colors from values that may be broken colors", () => {
+    for (const value of ["16px", "0.125rem", 1.5, "Inter, sans-serif", "bold", "0 1px 2px"]) {
+      expect(clearlyNotColor(value)).toBe(true);
+    }
+    for (const value of ["#12345", "rgb(1 2)", "blu", "0 1px 2px #000", { colorSpace: "srgb" }]) {
+      expect(clearlyNotColor(value)).toBe(false);
+    }
+  });
+
+  it("gives a failing token one suggestion that passes on all its backgrounds", () => {
+    const report = check(
+      {
+        gray: {
+          "100": color("#eeeeee"),
+          "400": color("#999999"),
+          "500": color("#777777"),
+          "700": color("#555555"),
+          "900": color("#222222"),
+        },
+        text: color("{gray.500}"),
+        page: color("#ffffff"),
+        panel: color("#e0e0e0"),
+      },
+      { pairs: [{ fg: "text", bg: ["page", "panel"] }] },
+    );
+    const results = byPair(report.results);
+    expect(results["text|page"]?.suggestion).toMatchObject({
+      value: "{gray.700}",
+      backgrounds: 2,
+    });
+    expect(results["text|panel"]?.suggestion).toMatchObject({
+      value: "{gray.700}",
+      backgrounds: 2,
+    });
+  });
+
+  it("says so when no single shade passes on every background", () => {
+    const report = check(
+      {
+        text: color("#777777"),
+        light: color("#ffffff"),
+        dark: color("#000000"),
+        mid: color("#777777"),
+      },
+      { pairs: [{ fg: "text", bg: ["light", "dark", "mid"] }] },
+    );
+    const failing = report.results.filter((r) => r.status === "fail");
+    expect(failing.length).toBeGreaterThan(0);
+    for (const result of failing) {
+      expect(result.suggestion).toBeUndefined();
+      expect(result.note).toBe(
+        "No single shade of text passes on all 3 backgrounds it is checked on in this mode",
+      );
+    }
+  });
+
+  it("prints the unrounded blend when a pair is within 0.02 of the minimum", () => {
+    const report = check(
+      { fg: color("#767676"), bg: color("rgb(255 255 255 / 99.5%)"), canvas: color("#000000") },
+      { base: "{canvas}", pairs: [{ fg: "fg", bg: "bg" }] },
+    );
+    const [result] = report.results;
+    expect(result?.ratio).toBeCloseTo(4.493, 3);
+    expect(result?.bgExact).toBe("rgb(253.72 253.72 253.72)");
+    expect(formatText(report, { color: false, verbose: false })).toContain(
+      "Before rounding: background rgb(253.72 253.72 253.72)",
+    );
+    const far = check(
+      { fg: color("#000000"), bg: color("rgb(255 255 255 / 50%)") },
+      { pairs: [{ fg: "fg", bg: "bg" }] },
+    );
+    expect(far.results[0]?.bgExact).toBeUndefined();
+  });
+
+  it("warns when a dark mode blends translucent backgrounds over white", () => {
+    const files = {
+      "dark.json": JSON.stringify({
+        text: color("#ffffff"),
+        scrim: color("rgb(0 0 0 / 50%)"),
+        canvas: color("#000000"),
+      }),
+    };
+    const pairs = [{ fg: "text", bg: "scrim" }];
+    const warned = checkFiles(files, { modes: { dark: ["dark.json"] }, pairs });
+    expect(warned.warnings.map((w) => w.message)).toEqual([
+      'Translucent backgrounds in this dark mode are blended over white. Set its base to your page background, like "base": { "dark": "{color.bg.canvas}" }',
+    ]);
+    const based = checkFiles(files, { modes: { dark: ["dark.json"] }, base: "{canvas}", pairs });
+    expect(based.warnings).toEqual([]);
+    const light = checkFiles(files, { modes: { light: ["dark.json"] }, pairs });
+    expect(light.warnings).toEqual([]);
+  });
+
+  it("reports an unreadable token once in the text report, with the pairs it affects", () => {
+    const report = check(
+      {
+        text: color("{missing}"),
+        a: color("#ffffff"),
+        b: color("#eeeeee"),
+        c: color("#dddddd"),
+      },
+      { pairs: [{ fg: "text", bg: ["a", "b", "c"] }] },
+    );
+    expect(report.results.every((r) => r.errorToken === "text")).toBe(true);
+    const text = formatText(report, { color: false, verbose: false });
+    expect(text).toContain("✗ text could not be read (affects 3 pairs)");
+    expect(text.match(/Cannot check/g)).toHaveLength(1);
+    expect(formatMarkdown(report)).toContain("`text` (affects 3 pairs)");
   });
 });

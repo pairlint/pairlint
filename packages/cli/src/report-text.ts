@@ -27,8 +27,21 @@ export function formatText(report: CheckReport, options: TextOptions): string {
       continue;
     }
 
+    // One unreadable token breaks every pair it is in. It is reported once, with the count.
+    const errorCounts = new Map<string, number>();
     for (const result of inMode) {
-      if (result.status === "fail" || result.status === "error") {
+      if (result.status !== "error") continue;
+      const key = errorKey(result);
+      errorCounts.set(key, (errorCounts.get(key) ?? 0) + 1);
+    }
+    const reported = new Set<string>();
+    for (const result of inMode) {
+      if (result.status === "error") {
+        const key = errorKey(result);
+        if (reported.has(key)) continue;
+        reported.add(key);
+        lines.push(...errorLines(result, errorCounts.get(key) ?? 1, paint));
+      } else if (result.status === "fail") {
         lines.push(...problemLines(result, paint));
       } else if (options.verbose) {
         lines.push(...detailLines(result, paint));
@@ -67,23 +80,49 @@ export function formatText(report: CheckReport, options: TextOptions): string {
   return `${lines.join("\n")}\n`;
 }
 
+function errorKey(result: PairResult): string {
+  return `${result.errorToken ?? pairName(result)}\u0000${result.message ?? ""}`;
+}
+
+function errorLines(result: PairResult, count: number, paint: Painter): string[] {
+  const title =
+    count > 1 && result.errorToken !== undefined
+      ? `${result.errorToken} could not be read (affects ${count} pairs)`
+      : pairName(result);
+  const lines = [`  ${paint.red("✗")} ${title}`];
+  lines.push(`    Cannot check: ${result.message ?? "unknown problem"}`);
+  const location =
+    result.errorToken === result.bg ? result.bgLocation : (result.fgLocation ?? result.bgLocation);
+  if (location) lines.push(`    ${paint.dim(formatLocation(location))}`);
+  return lines;
+}
+
 function problemLines(result: PairResult, paint: Painter): string[] {
   const lines = [`  ${paint.red("✗")} ${pairName(result)}`];
-  if (result.status === "error") {
-    lines.push(`    Cannot check: ${result.message ?? "unknown problem"}`);
-  } else {
-    lines.push(`    ${ratioText(result)}, needs ${requirementText(result)}`);
-    if (result.suggestion)
-      lines.push(`    ${paint.cyan("Try:")} ${suggestionText(result.suggestion)}`);
-    if (result.baselineExpired && result.baseline) {
-      lines.push(
-        `    ${paint.yellow("Baseline entry expired")} on ${result.baseline.expires} (owner ${result.baseline.owner}: ${result.baseline.reason})`,
-      );
-    }
+  lines.push(`    ${ratioText(result)}, needs ${requirementText(result)}`);
+  const exact = exactText(result);
+  if (exact) lines.push(`    ${paint.dim(exact)}`);
+  if (result.suggestion) {
+    lines.push(`    ${paint.cyan("Try:")} ${suggestionText(result.suggestion)}`);
+  } else if (result.note) {
+    lines.push(`    ${paint.dim(result.note)}`);
+  }
+  if (result.baselineExpired && result.baseline) {
+    lines.push(
+      `    ${paint.yellow("Baseline entry expired")} on ${result.baseline.expires} (owner ${result.baseline.owner}: ${result.baseline.reason})`,
+    );
   }
   const location = result.fgLocation ?? result.bgLocation;
   if (location) lines.push(`    ${paint.dim(formatLocation(location))}`);
   return lines;
+}
+
+/** The colors before rounding, for a ratio near the line: the hex values alone can disagree. */
+export function exactText(result: PairResult): string | undefined {
+  const parts: string[] = [];
+  if (result.fgExact) parts.push(`text ${result.fgExact}`);
+  if (result.bgExact) parts.push(`background ${result.bgExact}`);
+  return parts.length > 0 ? `Before rounding: ${parts.join(", ")}` : undefined;
 }
 
 function detailLines(result: PairResult, paint: Painter): string[] {
@@ -98,7 +137,11 @@ function detailLines(result: PairResult, paint: Painter): string[] {
       `  ${paint.dim(`– ${pairName(result)}  ${ratioText(result)}, baselined${until}, owner ${result.baseline.owner}: ${result.baseline.reason}`)}`,
     ];
   }
-  return [`  ${paint.green("✓")} ${pairName(result)}  ${paint.dim(ratioText(result))}`];
+  const exact = exactText(result);
+  return [
+    `  ${paint.green("✓")} ${pairName(result)}  ${paint.dim(ratioText(result))}`,
+    ...(exact ? [`    ${paint.dim(exact)}`] : []),
+  ];
 }
 
 export function pairName(result: PairResult): string {
@@ -112,10 +155,16 @@ export function ratioText(result: PairResult): string {
 
 export function suggestionText(suggestion: Suggestion): string {
   const ratio = `${formatRatio(suggestion.ratio)}:1`;
+  const all =
+    suggestion.backgrounds === undefined
+      ? ""
+      : suggestion.backgrounds === 2
+        ? ", passes on both of its backgrounds"
+        : `, passes on all ${suggestion.backgrounds} of its backgrounds`;
   if (suggestion.kind === "token") {
-    return `point ${suggestion.token} at ${suggestion.value} (${ratio})`;
+    return `point ${suggestion.token} at ${suggestion.value} (${ratio}${all})`;
   }
-  return `set ${suggestion.token} to ${suggestion.value}, or ${suggestion.oklch} (${ratio})`;
+  return `set ${suggestion.token} to ${suggestion.value}, or ${suggestion.oklch} (${ratio}${all})`;
 }
 
 export function requirementText(result: PairResult): string {

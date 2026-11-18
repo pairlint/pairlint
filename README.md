@@ -77,7 +77,7 @@ Each pair has a foreground (`fg`) and a background (`bg`). Both take a token id,
 | `color.text.on-*`    | `color.text.on-brand`, `color.text.on-danger`, and so on |
 | `color.surface.**`   | Everything below `color.surface`, at any depth           |
 
-A pattern that matches no color tokens is an error, so a typo cannot quietly pass.
+A pattern that matches no color tokens in any mode is an error, so a typo cannot quietly pass. When a token is missing in only some modes, like one brand without a link color, those modes skip it and pairlint prints one warning that lists them. Patterns skip untyped tokens whose value is clearly not a color (`16px`, `Inter, sans-serif`, a `font` shorthand), but a value that looks like a broken color (`#12345`) and an exact token id are always checked.
 
 `use` sets the threshold:
 
