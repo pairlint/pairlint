@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Aliases to names with spaces, like `{Light.Moss Green.7}` from a Figma variables export, now resolve instead of failing as "not a color".
+- `init` keeps light and dark high contrast apart (`light-high-contrast`, `dark-high-contrast`) and loads each after its base theme. It names CSS themes from attribute values, so `[data-light-theme="dark"]` is a dark theme.
+- `init` reads camelCase names (`fgColor-default`, `bgColor-muted`) and CSS property names (`button.color` next to `button.background-color`), leaves disabled backgrounds out of the foregrounds, follows aliases before counting a token as a color, and never writes a pattern that also matches untyped tokens that are not colors.
 - `pairlint init` finds token files and CSS custom properties, names modes after the themes it finds, guesses pairs from token names, and writes a commented `pairlint.config.json`. It never overwrites a config without `--force`.
 - Official GitHub Action: `uses: pairlint/pairlint@v0.1.0` annotates failing tokens in the pull request diff, writes a job summary, and can write SARIF. Inputs reach the shell only through environment variables.
 - New `github` report format: workflow command annotations for each failure and warning.

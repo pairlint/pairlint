@@ -51,6 +51,13 @@ describe("themeOf", () => {
     ["core", undefined],
     ["darkness", undefined],
     [".acme", undefined],
+    ['[data-color-mode="auto"][data-light-theme="dark"]', "dark"],
+    ['[data-color-mode="dark"][data-dark-theme="light"]', "light"],
+    ["[data-light-theme]", undefined],
+    ["theme-light-hc", "light-high-contrast"],
+    ["theme-semantics-dark-hc", "dark-high-contrast"],
+    ['[data-light-theme="light_high_contrast"]', "light-high-contrast"],
+    ["Color Dark.Mode 1", "dark"],
   ])("%s is %s", (label, theme) => {
     expect(themeOf(label)).toBe(theme);
   });
@@ -71,6 +78,21 @@ describe("roleOf", () => {
     ["color.text.disabled", "disabled"],
     ["color.gray.500", undefined],
     ["button.text.background", "bg"],
+    ["fgColor-default", "fg"],
+    ["bgColor-muted", "bg"],
+    ["borderColor-default", "ui"],
+    ["button-outline-bgColor-rest", "bg"],
+    ["fgColor-onEmphasis", "on"],
+    ["Bg.Accent.Fill Muted.Default", "bg"],
+    ["Text.Neutral.Subtle on emphasis", "on"],
+    ["utrecht.button.color", "fg"],
+    ["Shadow.High.Ambient.color", undefined],
+    ["utrecht.button.background-color", "bg"],
+    ["utrecht.textbox.border-color", "ui"],
+    ["zwolle.color.blue.40", undefined],
+    ["color.bg.action.primary.disabled", undefined],
+    ["bgColor-disabled", undefined],
+    ["Border.Disabled", "disabled"],
   ])("%s is %s", (id, role) => {
     expect(roleOf(id)).toBe(role);
   });
@@ -113,6 +135,89 @@ describe("inferConfig", () => {
       ["light", ["base.json"]],
       ["dark", ["base.json", "dark.json"]],
     ]);
+  });
+
+  it("keeps light and dark high contrast apart and loads each after its base theme", () => {
+    const config = inferConfig([
+      json("theme-light.json", { text: color("#333333"), bg: color("#ffffff") }),
+      json("theme-dark.json", { text: color("#cccccc"), bg: color("#111111") }),
+      json("theme-light-hc.json", { text: color("#000000") }),
+      json("theme-dark-hc.json", { text: color("#ffffff") }),
+    ]);
+    expect(config.modes).toEqual([
+      { name: "light", sources: ["theme-light.json"] },
+      { name: "dark", sources: ["theme-dark.json"] },
+      { name: "light-high-contrast", sources: ["theme-light.json", "theme-light-hc.json"] },
+      { name: "dark-high-contrast", sources: ["theme-dark.json", "theme-dark-hc.json"] },
+    ]);
+  });
+
+  it("names CSS themes from attribute values, not attribute names", () => {
+    const block = (selector: string, fg: string, bg: string) =>
+      `${selector} { --fgColor-default: ${fg}; --bgColor-default: ${bg}; }`;
+    const config = inferConfig([
+      {
+        path: "light.css",
+        text: block('[data-color-mode="light"][data-light-theme="light"]', "#111", "#fff"),
+      },
+      {
+        path: "dark.css",
+        text: block('[data-color-mode="dark"][data-dark-theme="dark"]', "#eee", "#111"),
+      },
+      {
+        path: "dark-auto.css",
+        text: block('[data-color-mode="auto"][data-light-theme="dark"]', "#eee", "#111"),
+      },
+    ]);
+    const light = config.modes.find((mode) => mode.name === "light");
+    expect(light?.sources).toEqual([
+      'light.css#[data-color-mode="light"][data-light-theme="light"]',
+    ]);
+    expect(config.pairs[0]).toEqual({ fg: ["fgColor-default"], bg: ["bgColor-default"] });
+  });
+
+  it("does not count an alias to a font or size as a color", () => {
+    const config = inferConfig([
+      json("brand.json", {
+        brand: {
+          blue: { value: "#395791" },
+          white: { value: "#ffffff" },
+          font: { value: "Arial, sans-serif" },
+          size: { value: "16px" },
+        },
+      }),
+      json("button.json", {
+        button: {
+          "background-color": { value: "{brand.blue}" },
+          color: { value: "{brand.white}" },
+          "font-family": { value: "{brand.font}" },
+          "font-size": { value: "{brand.size}" },
+        },
+      }),
+    ]);
+    expect(config.colorCount).toBe(4);
+    expect(config.pairs).toEqual([{ fg: ["button.color"], bg: ["button.background-color"] }]);
+  });
+
+  it("does not write a pattern that also matches untyped tokens that are not colors", () => {
+    const css = `:root { --text-primary: #111; --text-muted: #555; --text-body-size: 16px;
+      --surface-default: #fff; }`;
+    const config = inferConfig([{ path: "theme.css", text: css }]);
+    expect(config.pairs[0]).toEqual({
+      fg: ["text-muted", "text-primary"],
+      bg: ["surface-default"],
+    });
+  });
+
+  it("leaves disabled backgrounds out of the foregrounds", () => {
+    const config = inferConfig([
+      json("t.json", {
+        text: { primary: color("#111"), disabled: color("#bbb") },
+        bg: { canvas: color("#fff"), disabled: color("#eee") },
+      }),
+    ]);
+    expect(config.pairs.flatMap((pair) => pair.fg)).not.toContain("bg.disabled");
+    expect(config.pairs.flatMap((pair) => pair.bg)).not.toContain("bg.disabled");
   });
 
   it("reads Tokens Studio sets in tokenSetOrder", () => {
