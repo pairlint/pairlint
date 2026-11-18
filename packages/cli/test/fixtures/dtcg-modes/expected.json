@@ -371,6 +371,7 @@
         "side": "fg",
         "token": "color.border.default",
         "value": "{color.gray.500}",
+        "color": "#80868b",
         "ratio": 3.663496229572287
       }
     },
@@ -401,6 +402,7 @@
         "side": "fg",
         "token": "color.border.default",
         "value": "{color.gray.500}",
+        "color": "#80868b",
         "ratio": 4.370247207315039
       }
     },
@@ -431,6 +433,7 @@
         "side": "fg",
         "token": "color.text.secondary",
         "value": "{color.gray.400}",
+        "color": "#9aa0a6",
         "ratio": 5.1108948094606035
       }
     },
@@ -461,6 +464,7 @@
         "side": "fg",
         "token": "color.text.secondary",
         "value": "{color.gray.400}",
+        "color": "#9aa0a6",
         "ratio": 6.0968736879343925
       }
     },

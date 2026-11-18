@@ -1,5 +1,5 @@
-import { existsSync, readFileSync } from "node:fs";
-import { dirname, resolve } from "node:path";
+import { existsSync, readFileSync, writeFileSync } from "node:fs";
+import { dirname, relative, resolve } from "node:path";
 import { parseArgs } from "node:util";
 import type { WcagLevel } from "@pairlint/contrast";
 import { exitCode, explainPair, runCheck } from "./check.js";
@@ -7,7 +7,10 @@ import { CONFIG_FILE, parseConfig } from "./config.js";
 import { InputError } from "./errors.js";
 import { createFileReader, MAX_FILE_BYTES, toDisplayPath } from "./files.js";
 import { formatExplainText } from "./report-explain.js";
+import { formatHtml } from "./report-html.js";
 import { formatExplainJson, formatJson } from "./report-json.js";
+import { formatMarkdown } from "./report-markdown.js";
+import { formatSarif } from "./report-sarif.js";
 import { formatLocation, formatText } from "./report-text.js";
 
 export interface RunContext {
@@ -28,7 +31,8 @@ const HELP = `Usage
 
 Options
   -c, --config <path>   Config file (default: ./${CONFIG_FILE})
-  -f, --format <name>   Output format: text or json (default: text)
+  -f, --format <name>   text, json, sarif, markdown or html (default: text)
+  -o, --output <path>   Write the report to a file instead of the terminal
   -l, --level <level>   AA or AAA, overrides the config
   -m, --mode <name>     Check only this mode. Repeat for more than one
       --verbose         List passing and exempt pairs too
@@ -98,10 +102,27 @@ function runOrThrow(context: RunContext): number {
     throw new InputError(`Unknown command "${positionals.join(" ")}". Run "pairlint --help".`);
   }
 
-  const format = values.format ?? "text";
-  if (format !== "text" && format !== "json") {
-    throw new InputError(`Unknown format "${format}". Use "text" or "json".`);
+  const format = normalizeFormat(values.format ?? "text");
+  if (format === undefined) {
+    throw new InputError(
+      `Unknown format "${values.format}". Use ${FORMATS.map((name) => `"${name}"`).join(", ")}.`,
+    );
   }
+  if (command === "explain" && format !== "text" && format !== "json") {
+    throw new InputError('explain supports "text" and "json" output only.');
+  }
+  const write = (text: string) => {
+    if (values.output === undefined) {
+      context.stdout(text);
+      return;
+    }
+    const path = resolve(context.cwd, values.output);
+    try {
+      writeFileSync(path, text, "utf8");
+    } catch (error) {
+      throw new InputError(`Cannot write ${values.output}: ${(error as Error).message}`);
+    }
+  };
   let level: WcagLevel | undefined;
   if (values.level !== undefined) {
     const upper = values.level.toUpperCase();
@@ -140,24 +161,50 @@ function runOrThrow(context: RunContext): number {
   if (command === "explain") {
     const [, fg, bg] = positionals as [string, string, string];
     const explanations = explainPair(config, readFile, fg, bg, options);
-    context.stdout(
+    write(
       format === "json"
         ? formatExplainJson(explanations)
-        : formatExplainText(explanations, useColor(values, context)),
+        : formatExplainText(explanations, useColor(values, context) && values.output === undefined),
     );
     return exitCode({ results: explanations.map((explanation) => explanation.result) });
   }
 
   const report = runCheck(config, readFile, options);
 
-  if (format === "json") {
-    context.stdout(formatJson(report));
-  } else {
-    context.stdout(
-      formatText(report, { color: useColor(values, context), verbose: values.verbose === true }),
-    );
+  const configDir = dirname(configPath);
+  const toUri = (file: string) => toDisplayPath(relative(context.cwd, resolve(configDir, file)));
+  switch (format) {
+    case "json":
+      write(formatJson(report));
+      break;
+    case "sarif":
+      write(formatSarif(report, { version: context.version, toUri }));
+      break;
+    case "markdown":
+      write(formatMarkdown(report));
+      break;
+    case "html":
+      write(formatHtml(report, { version: context.version }));
+      break;
+    case "text":
+      write(
+        formatText(report, {
+          color: useColor(values, context) && values.output === undefined,
+          verbose: values.verbose === true,
+        }),
+      );
+      break;
   }
   return exitCode(report);
+}
+
+const FORMATS = ["text", "json", "sarif", "markdown", "html"] as const;
+type Format = (typeof FORMATS)[number];
+
+function normalizeFormat(name: string): Format | undefined {
+  const lower = name.toLowerCase();
+  if (lower === "md") return "markdown";
+  return (FORMATS as readonly string[]).includes(lower) ? (lower as Format) : undefined;
 }
 
 function parseCliArgs(argv: readonly string[]) {
@@ -169,6 +216,7 @@ function parseCliArgs(argv: readonly string[]) {
     options: {
       config: { type: "string", short: "c" },
       format: { type: "string", short: "f" },
+      output: { type: "string", short: "o" },
       level: { type: "string", short: "l" },
       mode: { type: "string", short: "m", multiple: true },
       verbose: { type: "boolean" },

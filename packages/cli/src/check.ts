@@ -57,7 +57,15 @@ export interface PairResult {
  * which keeps the design system intact. "color" is a new value with the lightness adjusted.
  */
 export type Suggestion =
-  | { kind: "token"; side: "fg" | "bg"; token: string; value: string; ratio: number }
+  | {
+      kind: "token";
+      side: "fg" | "bg";
+      token: string;
+      value: string;
+      /** The suggested shade's own color, before blending. */
+      color: string;
+      ratio: number;
+    }
   | { kind: "color"; side: "fg"; token: string; value: string; oklch: string; ratio: number };
 
 export interface Warning {
@@ -373,7 +381,7 @@ class ModeChecker {
     if (!current.ok) return undefined;
     const currentLightness = oklabLightness(current.color.rgba);
 
-    let best: { id: string; ratio: number; distance: number } | undefined;
+    let best: { id: string; color: string; ratio: number; distance: number } | undefined;
     for (const candidate of this.tokens.match(`${scale}.*`)) {
       if (candidate === target) continue;
       const lookup = this.lookup(candidate);
@@ -381,10 +389,19 @@ class ModeChecker {
       const ratio = ratioOf(lookup.color.rgba);
       if (ratio < required) continue;
       const distance = Math.abs(oklabLightness(lookup.color.rgba) - currentLightness);
-      if (!best || distance < best.distance) best = { id: candidate, ratio, distance };
+      if (!best || distance < best.distance) {
+        best = { id: candidate, color: toHex(lookup.color.rgba), ratio, distance };
+      }
     }
     if (!best) return undefined;
-    return { kind: "token", side, token: id, value: `{${best.id}}`, ratio: best.ratio };
+    return {
+      kind: "token",
+      side,
+      token: id,
+      value: `{${best.id}}`,
+      color: best.color,
+      ratio: best.ratio,
+    };
   }
 
   private matchColors(patterns: readonly string[], rule: PairRule, side: "fg" | "bg"): string[] {
