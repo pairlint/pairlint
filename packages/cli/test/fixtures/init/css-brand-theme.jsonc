@@ -1,0 +1,17 @@
+{
+  "$schema": "./node_modules/pairlint/schema.json",
+  // Found 13 color tokens in 1 file.
+  // 2 modes, named after the themes in your file names and selectors.
+  "modes": {
+    "light": "theme.css",
+    "dark": ["theme.css", "theme.css#[data-theme=\"dark\"]"]
+  },
+  // Also has colors, but does not look like a theme: brands.css#.acme
+  // Also has colors, but does not look like a theme: brands.css#.zen
+  // Pairs inferred from token names. Check that each one is a real combination in your UI.
+  "pairs": [
+    { "fg": ["on-brand", "text*"], "bg": "surface*" },
+    { "fg": "border", "bg": "surface*", "use": "ui" },
+    { "fg": "on-brand", "bg": "surface*", "use": "exempt", "reason": "On- colors sit on their own fill, which is checked separately" }
+  ]
+}

@@ -1,7 +1,7 @@
 // Keeps the install small. Raise the budget only with a reason in the pull request.
 import { execFileSync } from "node:child_process";
 
-const BUDGET_BYTES = 200_000;
+const BUDGET_BYTES = 250_000;
 const args = ["pack", "--dry-run", "--json", "--workspaces"];
 
 // `npm run` sets npm_execpath, which lets us call npm through node without a shell on every OS.

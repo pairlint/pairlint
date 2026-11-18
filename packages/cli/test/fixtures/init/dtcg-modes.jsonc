@@ -1,0 +1,15 @@
+{
+  "$schema": "./node_modules/pairlint/schema.json",
+  // Found 15 color tokens in 3 files.
+  // 2 modes, named after the themes in your file names and selectors.
+  "modes": {
+    "light": ["tokens/core.json", "tokens/light.json"],
+    "dark": ["tokens/core.json", "tokens/dark.json"]
+  },
+  // Pairs inferred from token names. Check that each one is a real combination in your UI.
+  "pairs": [
+    { "fg": "color.text.*", "bg": "color.surface.*" },
+    { "fg": "color.border.default", "bg": "color.surface.*", "use": "ui" },
+    { "fg": "color.text.disabled", "bg": "color.surface.*", "use": "exempt", "reason": "WCAG 1.4.3 does not apply to disabled controls" }
+  ]
+}

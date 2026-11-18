@@ -29,6 +29,7 @@ export {
 } from "./check.js";
 export {
   CONFIG_FILE,
+  CONFIG_KEYS,
   type Config,
   DEFAULT_BASE,
   DEFAULT_BASELINE,
@@ -37,6 +38,7 @@ export {
   type ModeConfig,
   modeMatches,
   modeNames,
+  PAIR_KEYS,
   type PairRule,
   type PairUse,
   parseConfig,
@@ -44,7 +46,18 @@ export {
 } from "./config.js";
 export { InputError } from "./errors.js";
 export { createFileReader, MAX_FILE_BYTES, type ReadFile } from "./files.js";
+export {
+  type FoundSource,
+  findTokenFiles,
+  type InferredConfig,
+  type InferredPair,
+  inferConfig,
+  renderConfig,
+  roleOf,
+  themeOf,
+} from "./init.js";
 export { formatExplainText } from "./report-explain.js";
+export { escapeData, escapeProperty, formatGithub, type GithubOptions } from "./report-github.js";
 export { formatHtml, HTML_PALETTE, HTML_ROW_LIMIT, type HtmlOptions } from "./report-html.js";
 export { formatExplainJson, formatJson, JSON_SCHEMA_VERSION } from "./report-json.js";
 export { formatMarkdown, MARKDOWN_ROW_LIMIT } from "./report-markdown.js";

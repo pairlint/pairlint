@@ -37,3 +37,45 @@ jobs:
       - run: npm test
       - run: npm run check:dist
       - run: npm run check:size
+
+  action:
+    name: GitHub Action
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - run: npm run build
+      - name: Run the action on a project with failures
+        id: failing
+        uses: ./
+        env:
+          PAIRLINT_CLI: ${{ github.workspace }}/packages/cli/dist/bin.js
+        with:
+          working-directory: packages/cli/test/fixtures/css-brand-theme
+          mode: dark, zen/light
+          sarif: pairlint.sarif
+          fail: "false"
+      - name: Run the action on a project that passes
+        id: passing
+        uses: ./
+        env:
+          PAIRLINT_CLI: ${{ github.workspace }}/packages/cli/dist/bin.js
+        with:
+          working-directory: packages/cli/test/fixtures/tokens-studio
+      - name: Check the results
+        env:
+          FAILING: ${{ steps.failing.outputs.exit-code }}
+          PASSING: ${{ steps.passing.outputs.exit-code }}
+        run: |
+          test "$FAILING" = 1
+          test "$PASSING" = 0
+          sarif=packages/cli/test/fixtures/css-brand-theme/pairlint.sarif
+          grep -q '"uri": "packages/cli/test/fixtures/css-brand-theme/theme.css"' "$sarif"

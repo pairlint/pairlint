@@ -1,0 +1,13 @@
+{
+  "$schema": "./node_modules/pairlint/schema.json",
+  // Found 4 color tokens in 1 file.
+  // 2 modes, named after the themes in your file names and selectors.
+  "modes": {
+    "light": ["tokens.json#core", "tokens.json#light"],
+    "dark": ["tokens.json#core", "tokens.json#dark"]
+  },
+  // Pairs inferred from token names. Check that each one is a real combination in your UI.
+  "pairs": [
+    { "fg": ["ink", "text.default"], "bg": "bg.default" }
+  ]
+}

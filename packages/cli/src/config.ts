@@ -55,7 +55,8 @@ export interface Config {
   baseline: string;
 }
 
-const TOP_LEVEL_KEYS = [
+/** Every top-level config setting. schema.json must list the same ones. */
+export const CONFIG_KEYS: readonly string[] = [
   "$schema",
   "level",
   "format",
@@ -65,7 +66,8 @@ const TOP_LEVEL_KEYS = [
   "pairs",
   "baseline",
 ];
-const PAIR_KEYS = ["fg", "bg", "use", "min", "reason", "modes"];
+/** Every setting a pair accepts. */
+export const PAIR_KEYS: readonly string[] = ["fg", "bg", "use", "min", "reason", "modes"];
 const USES: readonly PairUse[] = ["body", "large", "ui", "exempt"];
 const LEVELS: readonly WcagLevel[] = ["AA", "AAA"];
 const FORMATS = ["auto", "dtcg", "tokens-studio", "style-dictionary"] as const;
@@ -118,7 +120,7 @@ class ConfigReader {
 
   read(root: unknown): Config {
     if (!isPlainObject(root)) this.fail([], "The config must be a JSON object");
-    this.checkKeys(root, TOP_LEVEL_KEYS, []);
+    this.checkKeys(root, CONFIG_KEYS, []);
 
     const level = this.readEnum(root.level, LEVELS, ["level"], "AA");
     if (root.format === "css") {
@@ -377,7 +379,11 @@ class ConfigReader {
     );
   }
 
-  private checkKeys(object: Record<string, unknown>, allowed: string[], path: string[]): void {
+  private checkKeys(
+    object: Record<string, unknown>,
+    allowed: readonly string[],
+    path: string[],
+  ): void {
     for (const key of Object.keys(object)) {
       if (!allowed.includes(key)) this.unknown([...path, key], key, allowed, "setting");
     }

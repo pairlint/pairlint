@@ -23,5 +23,26 @@ for (const name of readdirSync("packages")) {
     }
   }
 }
+// The GitHub Action runs this version from npm by default, so it has to move with the release.
+const actionVersion = actionDefaultVersion(readFileSync("action.yml", "utf8"));
+if (actionVersion !== expected) {
+  console.error(
+    `action.yml runs pairlint ${actionVersion ?? "(not found)"}, but the tag is ${tag}`,
+  );
+  ok = false;
+}
 if (!ok) process.exit(1);
-console.log(`All packages are at ${expected}.`);
+console.log(`All packages and action.yml are at ${expected}.`);
+
+/** The default of the "version" input in action.yml. */
+export function actionDefaultVersion(yaml) {
+  const lines = yaml.split(/\r?\n/);
+  const start = lines.indexOf("  version:");
+  if (start === -1) return undefined;
+  for (const line of lines.slice(start + 1)) {
+    if (!line.startsWith("    ")) return undefined;
+    const match = /^ {4}default: "([^"]+)"$/.exec(line);
+    if (match) return match[1];
+  }
+  return undefined;
+}

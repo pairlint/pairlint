@@ -84,6 +84,18 @@ export function parseCssTokens(
   return { format: "css", tokens, diagnostics };
 }
 
+/**
+ * Every selection that has custom properties, in file order: ":root", selectors, and
+ * "@media ..." queries. Each one can be passed back as `set`.
+ */
+export function listCssContexts(file: SourceFile): string[] {
+  const contexts = new Set<string>();
+  for (const block of new CssParser(file).parse()) {
+    for (const context of describeContexts(block)) contexts.add(context);
+  }
+  return [...contexts];
+}
+
 export function isCssPath(path: string): boolean {
   return path.toLowerCase().endsWith(".css");
 }

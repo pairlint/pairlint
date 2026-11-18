@@ -1,5 +1,8 @@
 # pairlint
 
+[![CI](https://github.com/pairlint/pairlint/actions/workflows/ci.yml/badge.svg)](https://github.com/pairlint/pairlint/actions/workflows/ci.yml)
+[![OpenSSF Scorecard](https://api.scorecard.dev/projects/github.com/pairlint/pairlint/badge)](https://scorecard.dev/viewer/?uri=github.com/pairlint/pairlint)
+
 Check WCAG contrast for every text and background pair in your design tokens, in every mode.
 
 ```
@@ -24,12 +27,20 @@ dark
 
 ```sh
 npm install --save-dev pairlint
+npx pairlint init
 ```
 
-Add `pairlint.config.json` next to your tokens:
+`init` looks through your project for token files and CSS custom properties and writes `pairlint.config.json`. It names modes after the themes it finds (`light.json`, `[data-theme=dark]`, `@media (prefers-color-scheme: dark)`) and guesses pairs from token names: `text` and `font` against `surface` and `background`, `border` as UI, `on-*` colors against their own fill, and disabled text exempt. Check that the pairs match your UI, then run:
+
+```sh
+npx pairlint
+```
+
+A config written by hand looks like this:
 
 ```jsonc
 {
+  "$schema": "./node_modules/pairlint/schema.json",
   "modes": {
     "light": ["tokens/core.json", "tokens/light.json"],
     "dark": ["tokens/core.json", "tokens/dark.json"]
@@ -41,15 +52,9 @@ Add `pairlint.config.json` next to your tokens:
 }
 ```
 
-Run it:
-
-```sh
-npx pairlint
-```
-
 ## Configuration
 
-`pairlint.config.json` accepts comments and trailing commas.
+`pairlint.config.json` accepts comments and trailing commas. Point `$schema` at `./node_modules/pairlint/schema.json` and your editor completes and checks every setting.
 
 | Setting    | What it does                                                                                                               | Default                    |
 | ---------- | -------------------------------------------------------------------------------------------------------------------------- | -------------------------- |
@@ -187,14 +192,16 @@ WCAG 2 contrast is defined in sRGB. Colors outside sRGB are brought in with the 
 pairlint [check] [options]
 pairlint explain <fg> <bg> [options]
 pairlint baseline --reason <text> --owner <name> [--expires <date>]
+pairlint init [--force]
 
   -c, --config <path>   Config file (default: ./pairlint.config.json)
-  -f, --format <name>   text, json, sarif, markdown or html (default: text)
+  -f, --format <name>   text, json, sarif, markdown, html or github (default: text)
   -o, --output <path>   Write the report to a file instead of the terminal
   -l, --level <level>   AA or AAA, overrides the config
   -m, --mode <name>     Check only this mode. Repeat for more than one
       --verbose         List passing, exempt and baselined pairs too
       --ignore-baseline Report baselined failures as failures
+      --force           Let init replace an existing config
       --color           Force colored output
       --no-color        Disable colored output
 ```
@@ -210,13 +217,14 @@ Color is on in terminals and off in pipes and CI logs. `NO_COLOR` and `FORCE_COL
 
 ### Reports
 
-| Format     | For                                     | What you get                                                                                  |
-| ---------- | --------------------------------------- | --------------------------------------------------------------------------------------------- |
-| `text`     | You, in a terminal                      | Failures grouped by mode, with fixes and file locations                                       |
-| `json`     | Scripts                                 | Every result, ratio, color, suggestion and location. Versioned with `"schemaVersion": 1`      |
-| `sarif`    | GitHub code scanning                    | SARIF 2.1.0. Failures show up as annotations on the token's line in pull requests             |
-| `markdown` | Pull request comments and job summaries | A short summary and a table of failures with suggested fixes                                  |
-| `html`     | Designers and stakeholders              | One self-contained page with color samples, ratios and fix previews, in light and dark themes |
+| Format     | For                                     | What you get                                                                                        |
+| ---------- | --------------------------------------- | --------------------------------------------------------------------------------------------------- |
+| `text`     | You, in a terminal                      | Failures grouped by mode, with fixes and file locations                                             |
+| `json`     | Scripts                                 | Every result, ratio, color, suggestion and location. Versioned with `"schemaVersion": 1`            |
+| `sarif`    | GitHub code scanning                    | SARIF 2.1.0. Failures show up as annotations on the token's line in pull requests                   |
+| `markdown` | Pull request comments and job summaries | A short summary and a table of failures with suggested fixes                                        |
+| `html`     | Designers and stakeholders              | One self-contained page with color samples, ratios and fix previews, in light and dark themes       |
+| `github`   | GitHub Actions logs                     | An error annotation on each failing token's line, in the pull request diff. No code scanning needed |
 
 The HTML report has no scripts and loads nothing from the network, so you can attach it to a ticket or open it offline. It meets WCAG AA itself, and a test checks that.
 
@@ -289,6 +297,8 @@ Pairs that cannot be checked at all, like a broken alias, can never be baselined
 
 ## GitHub Actions
 
+The pairlint action marks failing tokens right on the lines of the pull request diff and writes a summary to the run page:
+
 ```yaml
 name: Contrast
 on: pull_request
@@ -304,10 +314,23 @@ jobs:
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: 22
-      - run: npx --yes pairlint@0.1.0 --format markdown --output "$GITHUB_STEP_SUMMARY"
+      - uses: pairlint/pairlint@v0.1.0
 ```
 
-The Markdown summary shows on the workflow run page. To see failures as annotations on the token files in pull requests, also upload SARIF to code scanning:
+| Input               | What it does                                                              | Default                  |
+| ------------------- | ------------------------------------------------------------------------- | ------------------------ |
+| `config`            | Config file, relative to `working-directory`                              | `pairlint.config.json`   |
+| `working-directory` | Folder to run in                                                          | `.`                      |
+| `level`             | `AA` or `AAA`, overrides the config                                       |                          |
+| `mode`              | Check only these modes, separated by commas or new lines                  |                          |
+| `summary`           | Write a Markdown report to the job summary                                | `true`                   |
+| `sarif`             | Also write SARIF to this path, for code scanning                          |                          |
+| `fail`              | Fail the step when a pair fails. Config and token problems always fail it | `true`                   |
+| `version`           | The pairlint version to run from npm                                      | the action's own version |
+
+The `exit-code` output is `0`, `1` or `2`, the same as the command line.
+
+To keep results in GitHub code scanning as well, write SARIF and upload it:
 
 ```yaml
 permissions:
@@ -315,14 +338,18 @@ permissions:
   security-events: write
 steps:
   # checkout and setup-node as above
-  - run: npx --yes pairlint@0.1.0 --format sarif --output pairlint.sarif
+  - uses: pairlint/pairlint@v0.1.0
+    with:
+      sarif: pairlint.sarif
   - if: always()
     uses: github/codeql-action/upload-sarif@33d7b85da1a04171e211befe2c739303b9a4c066 # v4.39.3
     with:
       sarif_file: pairlint.sarif
 ```
 
-Pin actions by commit SHA and pairlint by exact version, as shown, so nothing changes under you.
+Pin the action to a release, or to its commit SHA for the strictest setup. The action runs an exact pairlint version from npm with install scripts turned off, and passes its inputs to the shell only through environment variables.
+
+Not on GitHub? Any CI can run `npx --yes pairlint@0.1.0 --format markdown` or `--format sarif`.
 
 ## What pairlint does not do
 
@@ -334,7 +361,7 @@ Pin actions by commit SHA and pairlint by exact version, as shown, so nothing ch
 
 ## Security
 
-pairlint reads files and prints a report. It has no runtime dependencies, makes no network requests, runs no install scripts and never evaluates code from your project. CI checks the published code for network, process and `eval` access on every change. Releases are published from GitHub Actions with npm provenance. See [SECURITY.md](SECURITY.md).
+pairlint reads files and prints a report. It has no runtime dependencies, makes no network requests, runs no install scripts and never evaluates code from your project. CI checks the published code for network, process and `eval` access on every change. Releases are published from GitHub Actions with npm provenance, and each GitHub release includes a CycloneDX SBOM for every package. OpenSSF Scorecard checks the repository's own practices every week. See [SECURITY.md](SECURITY.md).
 
 ## Packages
 

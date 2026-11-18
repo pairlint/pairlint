@@ -1,0 +1,92 @@
+name: pairlint
+description: Check WCAG contrast for every design token pair in every mode, with annotations on the lines to fix.
+author: pairlint
+branding:
+  icon: eye
+  color: purple
+
+inputs:
+  config:
+    description: Config file, relative to working-directory.
+    default: pairlint.config.json
+  working-directory:
+    description: Folder to run pairlint in.
+    default: .
+  level:
+    description: AA or AAA. Overrides the config.
+    default: ""
+  mode:
+    description: Check only these modes. Separate several with commas or new lines.
+    default: ""
+  summary:
+    description: Write a Markdown report to the job summary.
+    default: "true"
+  sarif:
+    description: Also write a SARIF report to this path, for github/codeql-action/upload-sarif.
+    default: ""
+  fail:
+    description: Fail the step when a pair fails. Config and token problems always fail it.
+    default: "true"
+  version:
+    description: The pairlint version to run from npm. An exact version like 0.1.0.
+    default: "0.1.0"
+
+outputs:
+  exit-code:
+    description: 0 when every pair passes, 1 when a pair fails, 2 for config or token problems.
+    value: ${{ steps.check.outputs.exit-code }}
+
+runs:
+  using: composite
+  steps:
+    - id: check
+      shell: bash
+      working-directory: ${{ inputs.working-directory }}
+      # Inputs reach the script only through environment variables, so no input can inject shell.
+      env:
+        INPUT_CONFIG: ${{ inputs.config }}
+        INPUT_LEVEL: ${{ inputs.level }}
+        INPUT_MODE: ${{ inputs.mode }}
+        INPUT_SUMMARY: ${{ inputs.summary }}
+        INPUT_SARIF: ${{ inputs.sarif }}
+        INPUT_FAIL: ${{ inputs.fail }}
+        INPUT_VERSION: ${{ inputs.version }}
+        npm_config_ignore_scripts: "true"
+        npm_config_update_notifier: "false"
+      run: |
+        set -uo pipefail
+
+        if [ -n "${PAIRLINT_CLI:-}" ]; then
+          # Used by this repository's own CI to test the action against a local build.
+          pairlint=(node "$PAIRLINT_CLI")
+        else
+          if ! [[ "$INPUT_VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.]+)?$ ]]; then
+            echo "::error title=pairlint::version must be an exact version like 0.1.0, not \"$INPUT_VERSION\""
+            exit 2
+          fi
+          pairlint=(npx --yes "pairlint@$INPUT_VERSION")
+        fi
+
+        args=(check --config "$INPUT_CONFIG")
+        if [ -n "$INPUT_LEVEL" ]; then args+=(--level "$INPUT_LEVEL"); fi
+        while IFS= read -r mode; do
+          mode="${mode#"${mode%%[![:space:]]*}"}"
+          mode="${mode%"${mode##*[![:space:]]}"}"
+          if [ -n "$mode" ]; then args+=(--mode "$mode"); fi
+        done < <(printf '%s\n' "$INPUT_MODE" | tr ',' '\n')
+
+        "${pairlint[@]}" "${args[@]}" --format github
+        code=$?
+        echo "exit-code=$code" >> "$GITHUB_OUTPUT"
+
+        if [ "$code" -lt 2 ]; then
+          if [ "$INPUT_SUMMARY" = "true" ]; then
+            "${pairlint[@]}" "${args[@]}" --format markdown >> "$GITHUB_STEP_SUMMARY"
+          fi
+          if [ -n "$INPUT_SARIF" ]; then
+            "${pairlint[@]}" "${args[@]}" --format sarif --output "$INPUT_SARIF"
+          fi
+        fi
+
+        if [ "$code" -eq 1 ] && [ "$INPUT_FAIL" = "false" ]; then exit 0; fi
+        exit "$code"

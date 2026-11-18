@@ -28,3 +28,7 @@ Releases are published from GitHub Actions using npm trusted publishing. No npm 
 ```sh
 npm audit signatures
 ```
+
+Each GitHub release also lists a CycloneDX SBOM for every package, written by `npm sbom` from the lockfile the release was built with. The packages have no runtime dependencies, so each SBOM lists only pairlint's own packages.
+
+[OpenSSF Scorecard](https://scorecard.dev/viewer/?uri=github.com/pairlint/pairlint) checks this repository's practices every week: pinned actions, token permissions, branch protection and more.
