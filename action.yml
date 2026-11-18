@@ -54,7 +54,9 @@ runs:
         npm_config_ignore_scripts: "true"
         npm_config_update_notifier: "false"
       run: |
-        set -uo pipefail
+        # GitHub runs this with "bash -e", which would stop at the first pairlint run that finds a
+        # failure. The script handles exit codes itself, so stopping early is turned off.
+        set +e -uo pipefail
 
         if [ -n "${PAIRLINT_CLI:-}" ]; then
           # Used by this repository's own CI to test the action against a local build.
