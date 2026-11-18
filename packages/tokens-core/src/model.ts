@@ -4,7 +4,7 @@ export interface SourceLocation {
   column: number;
 }
 
-export type TokenFormat = "dtcg" | "tokens-studio";
+export type TokenFormat = "dtcg" | "tokens-studio" | "style-dictionary" | "css";
 
 export interface Token {
   /** Dot-separated path, for example "color.text.primary". */
@@ -16,6 +16,11 @@ export interface Token {
   description: string | undefined;
   extensions: Record<string, unknown> | undefined;
   source: SourceLocation;
+  /**
+   * Used when the token is an alias whose target does not exist, the way CSS uses the second
+   * argument of var(). Only the CSS reader sets it.
+   */
+  fallback?: unknown;
 }
 
 export interface Diagnostic {

@@ -17,16 +17,26 @@ import {
 import {
   aliasTarget,
   compileTokenPattern,
+  isCssPath,
   type SourceLocation,
   TokenFileError,
   TokenSet,
   type TokenSetInput,
 } from "@pairlint/tokens-core";
-import type { Config, ModeConfig, PairRule, PairUse } from "./config.js";
+import {
+  type Config,
+  type ModeConfig,
+  modeMatches,
+  type PairRule,
+  type PairUse,
+} from "./config.js";
 import { InputError } from "./errors.js";
 import type { ReadFile } from "./files.js";
 
 export const MAX_CHECKS = 1_000_000;
+
+/** How far, in OKLab lightness (0 to 1), a background suggestion may move from the current shade. */
+export const MAX_BACKGROUND_SHIFT = 0.2;
 
 /** "baselined" is a failure accepted for now by an entry in the baseline file. */
 export type PairStatus = "pass" | "fail" | "exempt" | "baselined" | "error";
@@ -106,9 +116,7 @@ export function runCheck(
   options: CheckOptions = {},
 ): CheckReport {
   const level = options.level ?? config.level;
-  const modes = options.modes
-    ? config.modes.filter((mode) => options.modes?.includes(mode.name))
-    : config.modes;
+  const modes = selectModes(config, options.modes);
 
   const results: PairResult[] = [];
   const warnings: Warning[] = [];
@@ -160,9 +168,7 @@ export function explainPair(
   options: CheckOptions = {},
 ): Explanation[] {
   const level = options.level ?? config.level;
-  const modes = options.modes
-    ? config.modes.filter((mode) => options.modes?.includes(mode.name))
-    : config.modes;
+  const modes = selectModes(config, options.modes);
 
   return modes.map((mode) => {
     const checker = new ModeChecker(mode, loadTokens(mode, config, readFile), level, []);
@@ -184,6 +190,32 @@ export function explainPair(
     if (base) explanation.base = base;
     return explanation;
   });
+}
+
+const STEP_WORDS = ["lightest", "lighter", "light", "medium", "dark", "darker", "darkest"];
+
+/** Shade names: "500", "050", "A100", "light", "darker". */
+function isStep(name: string): boolean {
+  return /^[a-z]?\d+$/i.test(name) || STEP_WORDS.includes(name.toLowerCase());
+}
+
+/**
+ * The scale a token belongs to, when its name ends in a shade step: "color.gray.500" is in
+ * "color.gray", and "gray-500" (CSS) is in "gray". Hue names like "color.base.red" are not steps,
+ * so their siblings are never offered as replacements.
+ */
+function scaleOf(id: string): { prefix: string; separator: "." | "-" } | undefined {
+  for (const separator of [".", "-"] as const) {
+    const at = id.lastIndexOf(separator);
+    if (at > 0 && isStep(id.slice(at + 1))) return { prefix: id.slice(0, at), separator };
+  }
+  return undefined;
+}
+
+/** The modes -m picks. It takes full mode names and group values like "dark". */
+export function selectModes(config: Config, names: readonly string[] | undefined): ModeConfig[] {
+  if (!names) return config.modes;
+  return config.modes.filter((mode) => names.some((name) => modeMatches(mode, name)));
 }
 
 function loadTokens(mode: ModeConfig, config: Config, readFile: ReadFile): TokenSet {
@@ -224,7 +256,9 @@ class ModeChecker {
 
   /** Expands rules into concrete pairs. An exempt rule wins over every other rule for the same pair. */
   *expandPairs(rules: readonly PairRule[]): Generator<[string, string, PairRule]> {
-    const active = rules.filter((rule) => !rule.modes || rule.modes.includes(this.mode.name));
+    const active = rules.filter(
+      (rule) => !rule.modes || rule.modes.some((name) => modeMatches(this.mode, name)),
+    );
     const expanded = active.map((rule) => ({
       rule,
       fg: this.matchColors(rule.fg, rule, "fg"),
@@ -355,14 +389,17 @@ class ModeChecker {
     );
     if (fromFgScale) return fromFgScale;
 
-    const fromBgScale = this.nearestInScale(bg, "bg", required, (candidate) => {
+    const bgRatio = (candidate: Rgba) => {
       const next = compositeOver(candidate, base);
       return contrastRatio(compositeOver(fgRgba, next), next);
-    });
+    };
+    // A background is shared by many pairs, so only nudge it. Turning a dark surface light to
+    // fix one pair would break the theme.
+    const fromBgScale = this.nearestInScale(bg, "bg", required, bgRatio, MAX_BACKGROUND_SHIFT);
     if (fromBgScale) return fromBgScale;
 
     const fix = adjustLightness(fgRgba, background, required);
-    if (!fix) return undefined;
+    if (!fix) return this.nearestInScale(bg, "bg", required, bgRatio);
     return {
       kind: "color",
       side: "fg",
@@ -382,34 +419,37 @@ class ModeChecker {
     side: "fg" | "bg",
     required: number,
     ratioOf: (candidate: Rgba) => number,
+    maxShift = Number.POSITIVE_INFINITY,
   ): Suggestion | undefined {
     const resolution = this.tokens.resolve(id);
     if (!resolution.ok || resolution.chain.length < 2) return undefined;
     const target = resolution.chain[resolution.chain.length - 1] as string;
-    const scale = target.slice(0, target.lastIndexOf("."));
-    if (scale === "" || !target.includes(".")) return undefined;
+    const scale = scaleOf(target);
+    if (!scale) return undefined;
     const current = this.lookup(target);
     if (!current.ok) return undefined;
     const currentLightness = oklabLightness(current.color.rgba);
 
     let best: { id: string; color: string; ratio: number; distance: number } | undefined;
-    for (const candidate of this.tokens.match(`${scale}.*`)) {
-      if (candidate === target) continue;
+    for (const candidate of this.tokens.match(`${scale.prefix}${scale.separator}*`)) {
+      if (candidate === target || !isStep(candidate.slice(scale.prefix.length + 1))) continue;
       const lookup = this.lookup(candidate);
       if (!lookup.ok) continue;
       const ratio = ratioOf(lookup.color.rgba);
       if (ratio < required) continue;
       const distance = Math.abs(oklabLightness(lookup.color.rgba) - currentLightness);
+      if (distance > maxShift) continue;
       if (!best || distance < best.distance) {
         best = { id: candidate, color: toHex(lookup.color.rgba), ratio, distance };
       }
     }
     if (!best) return undefined;
+    const css = isCssPath(resolution.token.source.file);
     return {
       kind: "token",
       side,
       token: id,
-      value: `{${best.id}}`,
+      value: css ? `var(--${best.id})` : `{${best.id}}`,
       color: best.color,
       ratio: best.ratio,
     };

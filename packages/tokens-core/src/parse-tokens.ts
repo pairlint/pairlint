@@ -1,3 +1,4 @@
+import { isCssPath, parseCssTokens } from "./css.js";
 import { JsonParseError, type Position, parseJson } from "./json.js";
 import {
   type Diagnostic,
@@ -10,9 +11,15 @@ import {
 import { toPointer } from "./pointer.js";
 
 export interface ParseTokensOptions {
-  /** Defaults to "auto", which looks for "$value" (DTCG) or "value" + "type" (Tokens Studio). */
+  /**
+   * Defaults to "auto", which looks for "$value" (DTCG), "value" + "type" (Tokens Studio) or
+   * "value" alone (Style Dictionary). Files ending in ".css" are always read as CSS.
+   */
   format?: TokenFormat | "auto";
-  /** Read only this top-level key, for example one Tokens Studio set. */
+  /**
+   * Read only this top-level key, for example one Tokens Studio set. For CSS files, a selector
+   * or an "@media" query. See parseCssTokens.
+   */
   set?: string;
 }
 
@@ -25,27 +32,48 @@ export interface ParsedTokens {
 interface Keys {
   value: string;
   type: string;
-  description: string;
+  /** Checked in order. */
+  description: readonly string[];
   inheritType: boolean;
+  /** When true, a node needs both the value and the type key to be a token. */
+  typeRequired: boolean;
 }
 
 const DTCG_KEYS: Keys = {
   value: "$value",
   type: "$type",
-  description: "$description",
+  description: ["$description"],
   inheritType: true,
+  typeRequired: false,
 };
 
 const STUDIO_KEYS: Keys = {
   value: "value",
   type: "type",
-  description: "description",
+  description: ["description"],
   inheritType: false,
+  typeRequired: true,
+};
+
+const STYLE_DICTIONARY_KEYS: Keys = {
+  value: "value",
+  type: "type",
+  description: ["comment", "description"],
+  inheritType: false,
+  typeRequired: false,
+};
+
+const KEYS: Record<Exclude<TokenFormat, "css">, Keys> = {
+  dtcg: DTCG_KEYS,
+  "tokens-studio": STUDIO_KEYS,
+  "style-dictionary": STYLE_DICTIONARY_KEYS,
 };
 
 const RESERVED_NAME_CHARS = /[.{}]/;
 
 export function parseTokenFile(file: SourceFile, options: ParseTokensOptions = {}): ParsedTokens {
+  if (options.format === "css" || isCssPath(file.path)) return parseCssTokens(file, options.set);
+
   let parsed: ReturnType<typeof parseJson>;
   try {
     parsed = parseJson(file.text, { jsonc: true });
@@ -73,7 +101,7 @@ export function parseTokenFile(file: SourceFile, options: ParseTokensOptions = {
     options.format === undefined || options.format === "auto"
       ? detectFormat(document)
       : options.format;
-  const keys = format === "dtcg" ? DTCG_KEYS : STUDIO_KEYS;
+  const keys = KEYS[format];
   const walker = new Walker(file.path, parsed.positions, keys);
 
   if (options.set !== undefined) {
@@ -99,8 +127,18 @@ export function parseTokenFile(file: SourceFile, options: ParseTokensOptions = {
   return { format, tokens: walker.tokens, diagnostics: walker.diagnostics };
 }
 
-function detectFormat(document: Record<string, unknown>): TokenFormat {
+function detectFormat(document: Record<string, unknown>): Exclude<TokenFormat, "css"> {
   if (containsKey(document, (node) => "$value" in node)) return "dtcg";
+  if (isStudioMultiSet(document)) return "tokens-studio";
+  // Tokens Studio always writes a type. Style Dictionary often leaves it out.
+  if (
+    containsKey(
+      document,
+      (node) => "value" in node && !("type" in node) && !isPlainObject(node.value),
+    )
+  ) {
+    return "style-dictionary";
+  }
   if (containsKey(document, (node) => "value" in node && "type" in node)) return "tokens-studio";
   return "dtcg";
 }
@@ -171,7 +209,7 @@ class Walker {
 
   private isToken(node: Record<string, unknown>): boolean {
     if (!(this.keys.value in node)) return false;
-    return this.keys === DTCG_KEYS || this.keys.type in node;
+    return !this.keys.typeRequired || this.keys.type in node;
   }
 
   private addToken(
@@ -190,14 +228,14 @@ class Walker {
       return;
     }
     const ownType = node[this.keys.type];
-    const description = node[this.keys.description];
+    const description = this.keys.description.map((key) => node[key]).find(isString);
     const extensions = node.$extensions;
     this.tokens.push({
       id: path.join("."),
       path,
       type: typeof ownType === "string" ? ownType : inheritedType,
       value: node[this.keys.value],
-      description: typeof description === "string" ? description : undefined,
+      description,
       extensions: isPlainObject(extensions) ? extensions : undefined,
       source: location,
     });
@@ -207,4 +245,8 @@ class Walker {
     const position = this.positions.get(toPointer(pointerPath)) ?? { line: 1, column: 1 };
     return { file: this.file, line: position.line, column: position.column };
   }
+}
+
+function isString(value: unknown): value is string {
+  return typeof value === "string";
 }

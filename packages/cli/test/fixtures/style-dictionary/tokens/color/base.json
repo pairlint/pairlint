@@ -1,0 +1,13 @@
+{
+  "color": {
+    "base": {
+      "gray": {
+        "light": { "value": "#cccccc" },
+        "medium": { "value": "#767676" },
+        "dark": { "value": "#111111" }
+      },
+      "red": { "value": "#ff0000" },
+      "green": { "value": "#008a00", "comment": "Success" }
+    }
+  }
+}

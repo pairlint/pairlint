@@ -26,7 +26,10 @@ export interface TokenSource {
 }
 
 export interface ModeConfig {
+  /** For modes built from groups, the group values joined with "/", like "acme/dark". */
   name: string;
+  /** Group name to value, for modes built from groups, like { brand: "acme", theme: "dark" }. */
+  axes?: Record<string, string>;
   sources: TokenSource[];
   /** Color or "{alias}" that translucent backgrounds sit on. */
   base: string;
@@ -65,7 +68,29 @@ const TOP_LEVEL_KEYS = [
 const PAIR_KEYS = ["fg", "bg", "use", "min", "reason", "modes"];
 const USES: readonly PairUse[] = ["body", "large", "ui", "exempt"];
 const LEVELS: readonly WcagLevel[] = ["AA", "AAA"];
-const FORMATS = ["auto", "dtcg", "tokens-studio"] as const;
+const FORMATS = ["auto", "dtcg", "tokens-studio", "style-dictionary"] as const;
+
+/** Brand × theme × density adds up quickly. Past this, the config is almost certainly a mistake. */
+export const MAX_MODES = 256;
+const AXIS_SEPARATOR = "/";
+
+/**
+ * True when `name` picks out this mode: its full name, or one of its group values, so "dark"
+ * matches "acme/dark" and "zen/dark".
+ */
+export function modeMatches(mode: ModeConfig, name: string): boolean {
+  return mode.name === name || (mode.axes !== undefined && Object.values(mode.axes).includes(name));
+}
+
+/** Every name modeMatches accepts for these modes, in config order. */
+export function modeNames(modes: readonly ModeConfig[]): string[] {
+  const names = new Set<string>();
+  for (const mode of modes) {
+    names.add(mode.name);
+    for (const value of Object.values(mode.axes ?? {})) names.add(value);
+  }
+  return [...names];
+}
 
 /** Parses and validates pairlint.config.json. `file` is the display path used in messages. */
 export function parseConfig(text: string, file: string): Config {
@@ -96,6 +121,12 @@ class ConfigReader {
     this.checkKeys(root, TOP_LEVEL_KEYS, []);
 
     const level = this.readEnum(root.level, LEVELS, ["level"], "AA");
+    if (root.format === "css") {
+      this.fail(
+        ["format"],
+        '"format" is for JSON token files. Files ending in .css are always read as CSS, so leave "format" out',
+      );
+    }
     const format = this.readEnum(root.format, FORMATS, ["format"], "auto");
     const modes = this.readModes(root);
     this.applyBase(root.base, modes);
@@ -106,8 +137,8 @@ class ConfigReader {
     if (!Array.isArray(root.pairs) || root.pairs.length === 0) {
       this.fail(["pairs"], '"pairs" must be a list with at least one pair');
     }
-    const modeNames = modes.map((mode) => mode.name);
-    const pairs = root.pairs.map((pair, index) => this.readPair(pair, index, modeNames));
+    const names = modeNames(modes);
+    const pairs = root.pairs.map((pair, index) => this.readPair(pair, index, names));
 
     let baseline = DEFAULT_BASELINE;
     if (root.baseline !== undefined) {
@@ -120,33 +151,102 @@ class ConfigReader {
     return { file: this.file, level, format, modes, pairs, baseline };
   }
 
+  /**
+   * "tokens" alone is one mode. "modes" is several, and "tokens" next to it is loaded first in
+   * every mode. A mode whose value is an object is a group, and groups combine: brand × theme.
+   */
   private readModes(root: Record<string, unknown>): ModeConfig[] {
-    const hasTokens = root.tokens !== undefined;
-    const hasModes = root.modes !== undefined;
-    if (hasTokens && hasModes) {
-      this.fail(["modes"], 'Use either "tokens" (one mode) or "modes" (several), not both');
-    }
-    if (!hasTokens && !hasModes) {
+    if (root.tokens === undefined && root.modes === undefined) {
       this.fail(
         [],
         'Say where your tokens are: "tokens": ["tokens.json"] or "modes": { "light": [...], "dark": [...] }',
       );
     }
-    if (hasTokens) {
-      return [
-        {
-          name: DEFAULT_MODE,
-          sources: this.readSources(root.tokens, ["tokens"]),
-          base: DEFAULT_BASE,
-        },
-      ];
+    const shared = root.tokens === undefined ? [] : this.readSources(root.tokens, ["tokens"]);
+    if (root.modes === undefined) {
+      return [{ name: DEFAULT_MODE, sources: shared, base: DEFAULT_BASE }];
     }
     if (!isPlainObject(root.modes) || Object.keys(root.modes).length === 0) {
       this.fail(["modes"], '"modes" must be an object like { "light": ["light.json"] }');
     }
-    return Object.entries(root.modes).map(([name, sources]) => ({
-      name,
-      sources: this.readSources(sources, ["modes", name]),
+
+    const entries = Object.entries(root.modes);
+    const groups = entries.filter((entry): entry is [string, Record<string, unknown>] =>
+      isPlainObject(entry[1]),
+    );
+    if (groups.length === 0) {
+      return entries.map(([name, sources]) => ({
+        name,
+        sources: [...shared, ...this.readSources(sources, ["modes", name])],
+        base: DEFAULT_BASE,
+      }));
+    }
+    if (groups.length !== entries.length) {
+      const list = entries.find(([, value]) => !isPlainObject(value))?.[0] ?? "";
+      this.fail(
+        ["modes", list],
+        `"${list}" is a list of files, but "${groups[0]?.[0]}" is a group of modes. ` +
+          'Use { "light": [...], "dark": [...] } for one set of modes, or ' +
+          '{ "brand": { "acme": [...] }, "theme": { "light": [...] } } to combine groups',
+      );
+    }
+    return this.combineGroups(groups, shared);
+  }
+
+  /** Builds one mode per combination of group values: "acme/light", "acme/dark", "zen/light"... */
+  private combineGroups(
+    groups: [string, Record<string, unknown>][],
+    shared: TokenSource[],
+  ): ModeConfig[] {
+    const owner = new Map<string, string>();
+    const options = groups.map(([group, values]) => {
+      const names = Object.keys(values);
+      if (names.length === 0) {
+        this.fail(
+          ["modes", group],
+          `"${group}" needs at least one mode, like { "light": ["light.json"] }`,
+        );
+      }
+      return names.map((value) => {
+        const path = ["modes", group, value];
+        if (value.includes(AXIS_SEPARATOR) || value.trim() === "") {
+          this.fail(path, `Mode names in a group cannot be empty or contain "${AXIS_SEPARATOR}"`);
+        }
+        const other = owner.get(value);
+        if (other !== undefined) {
+          this.fail(
+            path,
+            `"${value}" is in both "${other}" and "${group}". Give each mode its own name`,
+          );
+        }
+        owner.set(value, group);
+        return { value, sources: this.readSources(values[value], path) };
+      });
+    });
+
+    const total = options.reduce((count, values) => count * values.length, 1);
+    if (total > MAX_MODES) {
+      this.fail(
+        ["modes"],
+        `These groups combine into ${total} modes. pairlint allows up to ${MAX_MODES}, so split the config or use fewer groups`,
+      );
+    }
+
+    let combinations: { values: string[]; sources: TokenSource[] }[] = [
+      { values: [], sources: shared },
+    ];
+    for (const values of options) {
+      combinations = combinations.flatMap((combination) =>
+        values.map((option) => ({
+          values: [...combination.values, option.value],
+          sources: [...combination.sources, ...option.sources],
+        })),
+      );
+    }
+    return combinations.map(({ values, sources }) => ({
+      name: values.join(AXIS_SEPARATOR),
+      axes: Object.fromEntries(groups.map(([group], index) => [group, values[index] ?? ""])),
+      sources,
       base: DEFAULT_BASE,
     }));
   }
@@ -169,6 +269,10 @@ class ConfigReader {
     });
   }
 
+  /**
+   * A base color can be set for every mode, for a group value like "dark", or for one full mode
+   * name like "acme/dark". Full names win over group values, and later groups win over earlier.
+   */
   private applyBase(value: unknown, modes: ModeConfig[]): void {
     if (value === undefined) return;
     if (typeof value === "string") {
@@ -178,12 +282,18 @@ class ConfigReader {
     if (!isPlainObject(value)) {
       this.fail(["base"], '"base" must be a color, or an object with a color per mode');
     }
-    const names = modes.map((mode) => mode.name);
+    const names = modeNames(modes);
     for (const [name, base] of Object.entries(value)) {
-      const mode = modes.find((m) => m.name === name);
-      if (!mode) this.unknown(["base", name], name, names, "mode");
+      if (!names.includes(name)) this.unknown(["base", name], name, names, "mode");
       if (typeof base !== "string") this.fail(["base", name], "A base color must be a string");
-      mode.base = base;
+    }
+    for (const mode of modes) {
+      for (const groupValue of Object.values(mode.axes ?? {})) {
+        const base = value[groupValue];
+        if (typeof base === "string") mode.base = base;
+      }
+      const own = value[mode.name];
+      if (typeof own === "string") mode.base = own;
     }
   }
 

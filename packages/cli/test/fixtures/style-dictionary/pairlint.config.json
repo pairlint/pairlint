@@ -1,0 +1,5 @@
+{
+  // A Style Dictionary 3 project: tokens split across files, references end in ".value".
+  "tokens": ["tokens/color/base.json", "tokens/color/font.json"],
+  "pairs": [{ "fg": "color.font.*", "bg": "color.background.*" }]
+}

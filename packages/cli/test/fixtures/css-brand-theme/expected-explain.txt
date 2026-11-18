@@ -1,0 +1,9 @@
+text-muted on surface-raised (acme/dark)
+  ✗ 3.07:1 (#64748b on #1e293b), needs 4.5:1 for body text (WCAG 1.4.3 AA)
+  foreground  text-muted → gray-500
+              #64748b  theme.css:21:3
+  background  surface-raised → gray-800
+              #1e293b  theme.css:23:3
+  base        #0f172a
+  blended     #64748b on #1e293b
+  Try: point text-muted at var(--gray-400) (5.70:1)

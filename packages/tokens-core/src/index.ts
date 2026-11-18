@@ -1,3 +1,4 @@
+export { isCssPath, normalizeMedia, normalizeSelector, parseCssTokens } from "./css.js";
 export {
   DEFAULT_MAX_DEPTH,
   JsonParseError,

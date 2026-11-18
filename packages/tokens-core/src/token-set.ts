@@ -97,6 +97,16 @@ export class TokenSet {
     return result;
   }
 
+  /**
+   * Style Dictionary 3 references point at the value itself, like "{color.blue.500.value}".
+   * Those resolve to the token when no token has the longer id.
+   */
+  private canonicalId(id: string): string {
+    if (this.tokens.has(id) || !id.endsWith(".value")) return id;
+    const short = id.slice(0, -".value".length);
+    return this.tokens.has(short) ? short : id;
+  }
+
   private resolveUncached(id: string): Resolution {
     const first = this.tokens.get(id);
     if (!first) return { ok: false, id, error: `Token "${id}" does not exist`, chain: [id] };
@@ -104,7 +114,9 @@ export class TokenSet {
     const chain: string[] = [];
     let type: string | undefined;
     let current = id;
+    let referrer: Token | undefined;
     for (;;) {
+      current = this.canonicalId(current);
       if (chain.includes(current)) {
         return {
           ok: false,
@@ -123,6 +135,18 @@ export class TokenSet {
         };
       }
       const token = this.tokens.get(current);
+      if (!token && referrer?.fallback !== undefined) {
+        // CSS: var(--missing, fallback) uses the fallback. The missing id leaves the chain.
+        chain.pop();
+        const fallback = referrer.fallback;
+        const fallbackTarget = aliasTarget(fallback);
+        if (fallbackTarget === undefined) {
+          return { ok: true, id, token: first, value: fallback, type, chain };
+        }
+        referrer = undefined;
+        current = fallbackTarget;
+        continue;
+      }
       if (!token) {
         const from = chain[chain.length - 2] ?? id;
         return {
@@ -145,6 +169,7 @@ export class TokenSet {
         }
         return { ok: true, id, token: first, value: token.value, type, chain };
       }
+      referrer = token;
       current = target;
     }
   }

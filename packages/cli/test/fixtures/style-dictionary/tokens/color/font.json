@@ -1,0 +1,14 @@
+{
+  "color": {
+    "font": {
+      "base": { "value": "{color.base.gray.dark.value}" },
+      "secondary": { "value": "{color.base.gray.medium.value}" },
+      "error": { "value": "{color.base.red.value}" },
+      "success": { "value": "{color.base.green.value}" }
+    },
+    "background": {
+      "base": { "value": "#ffffff", "comment": "Page background" },
+      "subtle": { "value": "{color.base.gray.light.value}" }
+    }
+  }
+}

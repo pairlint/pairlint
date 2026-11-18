@@ -1,7 +1,24 @@
 import { describe, expect, it } from "vitest";
-import { MAX_ALIAS_DEPTH, parseTokenFile, TokenFileError, TokenSet } from "../src/index.js";
+import {
+  MAX_ALIAS_DEPTH,
+  parseTokenFile,
+  type Token,
+  TokenFileError,
+  TokenSet,
+} from "../src/index.js";
 
 const file = (path: string, value: unknown) => ({ path, text: JSON.stringify(value, null, 2) });
+
+const token = (id: string, value: unknown, extra: Partial<Token> = {}): Token => ({
+  id,
+  path: id.split("."),
+  type: undefined,
+  value,
+  description: undefined,
+  extensions: undefined,
+  source: { file: "t.css", line: 1, column: 1 },
+  ...extra,
+});
 
 describe("parseTokenFile with DTCG", () => {
   it("reads tokens, inherits group types and records positions", () => {
@@ -96,6 +113,68 @@ describe("parseTokenFile with Tokens Studio", () => {
   });
 });
 
+describe("parseTokenFile with Style Dictionary", () => {
+  const dictionary = {
+    color: {
+      base: {
+        blue: { value: "#0057ff", comment: "Brand blue", attributes: { category: "color" } },
+        gray: { value: "#6b7280", type: "color" },
+      },
+      text: { link: { value: "{color.base.blue.value}" } },
+    },
+  };
+
+  it("detects tokens that have a value and no type", () => {
+    const parsed = parseTokenFile(file("sd.json", dictionary));
+    expect(parsed.format).toBe("style-dictionary");
+    expect(parsed.tokens.map((t) => [t.id, t.type, t.value])).toEqual([
+      ["color.base.blue", undefined, "#0057ff"],
+      ["color.base.gray", "color", "#6b7280"],
+      ["color.text.link", undefined, "{color.base.blue.value}"],
+    ]);
+  });
+
+  it("reads comment as the description and falls back to description", () => {
+    const parsed = parseTokenFile(
+      file("sd.json", {
+        a: { value: "#000", comment: "First" },
+        b: { value: "#fff", description: "Second" },
+      }),
+      { format: "style-dictionary" },
+    );
+    expect(parsed.tokens.map((t) => t.description)).toEqual(["First", "Second"]);
+  });
+
+  it("is not chosen for files whose values are all objects", () => {
+    expect(parseTokenFile(file("t.json", { a: { value: { r: 1 } } })).format).toBe("dtcg");
+  });
+
+  it("resolves Style Dictionary 3 references that end in .value", () => {
+    const tokens = TokenSet.fromFiles([{ file: file("sd.json", dictionary) }]);
+    expect(tokens.resolve("color.text.link")).toMatchObject({
+      ok: true,
+      value: "#0057ff",
+      chain: ["color.text.link", "color.base.blue"],
+    });
+  });
+
+  it("prefers a token whose id really ends in .value", () => {
+    const tokens = new TokenSet([
+      token("a", "#111111"),
+      token("a.value", "#222222"),
+      token("b", "{a.value}"),
+    ]);
+    expect(tokens.resolve("b")).toMatchObject({ ok: true, value: "#222222" });
+  });
+
+  it("reports a missing reference by its written id", () => {
+    const tokens = TokenSet.fromFiles([{ file: file("sd.json", { b: { value: "{a.value}" } }) }]);
+    const resolution = tokens.resolve("b");
+    expect(resolution.ok).toBe(false);
+    if (!resolution.ok) expect(resolution.error).toContain('"{a.value}"');
+  });
+});
+
 describe("TokenSet", () => {
   const set = (value: unknown) => TokenSet.fromFiles([{ file: file("t.json", value) }]);
 
@@ -164,6 +243,22 @@ describe("TokenSet", () => {
     expect(tokens.resolve("b")).toMatchObject({ ok: false });
     const resolution = tokens.resolve("b");
     if (!resolution.ok) expect(resolution.error).toContain("cannot resolve yet");
+  });
+
+  it("uses a fallback when the alias target is missing", () => {
+    const tokens = new TokenSet([
+      token("a", "{missing}", { fallback: "#123456" }),
+      token("b", "{missing}", { fallback: "{c}" }),
+      token("c", "#abcdef"),
+      token("d", "{c}", { fallback: "#000000" }),
+      token("e", "{missing}", { fallback: "{also-missing}" }),
+    ]);
+    expect(tokens.resolve("a")).toMatchObject({ ok: true, value: "#123456", chain: ["a"] });
+    expect(tokens.resolve("b")).toMatchObject({ ok: true, value: "#abcdef", chain: ["b", "c"] });
+    expect(tokens.resolve("d")).toMatchObject({ ok: true, value: "#abcdef", chain: ["d", "c"] });
+    const missing = tokens.resolve("e");
+    expect(missing.ok).toBe(false);
+    if (!missing.ok) expect(missing.error).toContain('"{also-missing}", which does not exist');
   });
 
   it("matches patterns and returns sorted ids", () => {

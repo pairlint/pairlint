@@ -13,8 +13,8 @@ dark
 1 failed, 23 passed across 2 modes (WCAG AA)
 ```
 
-- Reads W3C Design Tokens (DTCG) and Tokens Studio files, follows aliases, and merges several files per mode.
-- Checks every pair you describe in every mode: light, dark, brand, high contrast.
+- Reads W3C Design Tokens (DTCG), Tokens Studio, Style Dictionary and CSS custom properties, follows aliases, and merges several files per mode.
+- Checks every pair you describe in every mode: light, dark, high contrast, and every brand × theme combination.
 - Handles translucent colors, OKLCH, OKLab and Display P3.
 - Compares exactly. 4.499:1 does not pass 4.5:1, and the report never rounds a failure up.
 - Points at the file, line and column of the token to fix, and suggests the nearest shade that passes.
@@ -51,15 +51,15 @@ npx pairlint
 
 `pairlint.config.json` accepts comments and trailing commas.
 
-| Setting    | What it does                                                                                                         | Default                    |
-| ---------- | -------------------------------------------------------------------------------------------------------------------- | -------------------------- |
-| `tokens`   | Token files for a single mode.                                                                                       |                            |
-| `modes`    | Token files per mode, as `{ "light": [...], "dark": [...] }`. Use this or `tokens`.                                  |                            |
-| `pairs`    | Which tokens are checked against which. Required.                                                                    |                            |
-| `level`    | `"AA"` or `"AAA"`.                                                                                                   | `"AA"`                     |
-| `base`     | The color translucent backgrounds sit on. One color, or one per mode.                                                | `"#ffffff"`                |
-| `format`   | `"auto"`, `"dtcg"` or `"tokens-studio"`.                                                                             | `"auto"`                   |
-| `baseline` | The baseline file, relative to the config. See [Adopting pairlint](#adopting-pairlint-on-an-existing-design-system). | `"pairlint.baseline.json"` |
+| Setting    | What it does                                                                                                               | Default                    |
+| ---------- | -------------------------------------------------------------------------------------------------------------------------- | -------------------------- |
+| `tokens`   | Token files for a single mode. Next to `modes`, files every mode loads first.                                              |                            |
+| `modes`    | Token files per mode, as `{ "light": [...], "dark": [...] }`, or groups that combine. See [Modes](#modes-and-token-files). |                            |
+| `pairs`    | Which tokens are checked against which. Required.                                                                          |                            |
+| `level`    | `"AA"` or `"AAA"`.                                                                                                         | `"AA"`                     |
+| `base`     | The color translucent backgrounds sit on. One color, or one per mode.                                                      | `"#ffffff"`                |
+| `format`   | For JSON files: `"auto"`, `"dtcg"`, `"tokens-studio"` or `"style-dictionary"`. `.css` files are always read as CSS.        | `"auto"`                   |
+| `baseline` | The baseline file, relative to the config. See [Adopting pairlint](#adopting-pairlint-on-an-existing-design-system).       | `"pairlint.baseline.json"` |
 
 ### Pairs
 
@@ -86,7 +86,7 @@ A pattern that matches no color tokens is an error, so a typo cannot quietly pas
 Other pair settings:
 
 - `min`: a custom minimum ratio, such as `5`. It replaces the WCAG threshold for that pair.
-- `modes`: check this pair only in some modes, such as `["dark"]`.
+- `modes`: check this pair only in some modes, such as `["dark"]`. With [groups](#brand--theme-combinations), `"dark"` means every brand in its dark theme.
 - `reason`: required for `"exempt"` pairs, so the next person knows why. An exempt pair overrides every other rule for the same two tokens.
 
 ```jsonc
@@ -115,7 +115,57 @@ For a Tokens Studio file with several sets, pick sets with `#`:
 
 Without `#`, every set in the file is read in `$metadata.tokenSetOrder` order.
 
+Files every mode shares can go in `tokens`. They load before each mode's own files:
+
+```jsonc
+{
+  "tokens": ["tokens/core.json"],
+  "modes": { "light": ["tokens/light.json"], "dark": ["tokens/dark.json"] }
+}
+```
+
 pairlint only reads files inside the folder that holds its config.
+
+### Brand × theme combinations
+
+When a mode is an object instead of a list, it is a group. Groups combine, so two brands and two themes become four modes, each checked on its own:
+
+```jsonc
+{
+  "tokens": ["tokens/core.json"],
+  "modes": {
+    "brand": { "acme": ["brands/acme.json"], "zen": ["brands/zen.json"] },
+    "theme": { "light": ["themes/light.json"], "dark": ["themes/dark.json"] }
+  },
+  "base": { "dark": "{color.gray.950}" }
+}
+```
+
+The modes are named `acme/light`, `acme/dark`, `zen/light` and `zen/dark`. Files load in order: `tokens`, then the first group, then the next, so a theme can override a brand.
+
+Wherever a mode name goes (pair `modes`, `base`, `--mode`), you can use a full name like `"zen/dark"` or one value like `"dark"` for every mode that has it. In `base`, a full name wins over a single value. Groups can add up to 256 modes.
+
+### Style Dictionary
+
+Style Dictionary 3 files (tokens with `value` and an optional `comment`) are detected automatically. References like `{color.base.blue.value}` resolve to the token. Style Dictionary 4 projects that use the DTCG format are read as DTCG. pairlint reads JSON token files only and never runs JavaScript configs.
+
+### CSS custom properties
+
+Point pairlint at a `.css` file and each custom property becomes a token named without its `--`: `--text-muted` is `text-muted`. `var(--gray-500)` is an alias, and `var(--brand, #0057ff)` uses its fallback when `--brand` is not defined.
+
+By default pairlint reads `:root` and `html` rules. Add `#` and a selector or media query to read a theme instead, and list the default first so the theme only has to override what changes:
+
+```jsonc
+{
+  "modes": {
+    "light": ["theme.css"],
+    "dark": ["theme.css", "theme.css#[data-theme=dark]"],
+    "system-dark": ["theme.css", "theme.css#@media (prefers-color-scheme: dark)"]
+  }
+}
+```
+
+Selectors are matched exactly, with spacing and quotes ignored. `@layer` and `@supports` blocks are read as if they were not there, and nested rules and `&` work. When nothing matches, the error lists the selectors in the file that do have custom properties. pairlint reads the CSS without running anything and skips every declaration that is not a custom property.
 
 ### Translucent colors
 
@@ -279,7 +329,8 @@ Pin actions by commit SHA and pairlint by exact version, as shown, so nothing ch
 - **It is not a conformance claim.** Passing means your token pairs meet the WCAG 2.2 contrast ratios. A site also needs those tokens used in the right places, and much more.
 - **It cannot check gradients or images.** Only flat colors and translucent layers.
 - **It does not use APCA.** WCAG 3 has not settled on a contrast method. An informational APCA column may come later, but it will never fail a build on its own.
-- **Not yet:** Style Dictionary and CSS custom property inputs, and a Figma plugin. See the [roadmap](https://github.com/pairlint/pairlint/issues).
+- **It does not read computed values in CSS.** `calc()`, `color-mix()`, `light-dark()` and relative colors are reported as values pairlint cannot parse, with the file and line.
+- **Not yet:** a Figma plugin. See the [roadmap](https://github.com/pairlint/pairlint/issues).
 
 ## Security
 
