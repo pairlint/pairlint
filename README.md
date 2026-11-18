@@ -152,7 +152,7 @@ Wherever a mode name goes (pair `modes`, `base`, `--mode`), you can use a full n
 
 ### Style Dictionary
 
-Style Dictionary 3 files (tokens with `value` and an optional `comment`) are detected automatically. References like `{color.base.blue.value}` resolve to the token. Style Dictionary 4 projects that use the DTCG format are read as DTCG. pairlint reads JSON token files only and never runs JavaScript configs.
+Style Dictionary 3 files (tokens with `value` and an optional `comment`) are detected automatically. References like `{color.base.blue.value}` resolve to the token. Style Dictionary 4 projects that use the DTCG format are read as DTCG. Files ending in `.json5` are read as [JSON5](https://spec.json5.org), as in Primer's source tokens: unquoted keys, single quotes, comments, trailing commas and hex numbers all work. pairlint reads JSON and JSON5 token files only and never runs JavaScript configs.
 
 ### CSS custom properties
 

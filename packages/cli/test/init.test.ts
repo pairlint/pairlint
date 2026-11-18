@@ -602,6 +602,30 @@ describe("renderConfig", () => {
 });
 
 describe("findTokenFiles", () => {
+  it("finds JSON5 token files and infers a config from them", () => {
+    const dir = tempDir();
+    mkdirSync(join(dir, "src"), { recursive: true });
+    writeFileSync(
+      join(dir, "src", "light.json5"),
+      "{ fgColor: { default: { $type: 'color', $value: '#1f2328' } },\n" +
+        "  bgColor: { default: { $type: 'color', $value: '#ffffff', }, }, }",
+    );
+    writeFileSync(
+      join(dir, "src", "dark.json5"),
+      "// dark\n{ fgColor: { default: { $type: 'color', $value: '#f0f6fc' } },\n" +
+        "  bgColor: { default: { $type: 'color', $value: '#0d1117' } } }",
+    );
+    writeFileSync(join(dir, "tsconfig.json5"), "{}");
+    const files = findTokenFiles(dir);
+    expect(files.map((file) => file.path)).toEqual(["src/dark.json5", "src/light.json5"]);
+    const config = inferConfig(files);
+    expect(config.modes).toEqual([
+      { name: "light", sources: ["src/light.json5"] },
+      { name: "dark", sources: ["src/dark.json5"] },
+    ]);
+    expect(config.pairCount).toBe(1);
+  });
+
   it("skips dependencies, hidden folders, build output and tool configs", () => {
     const dir = tempDir();
     const write = (path: string, text = "{}") => {
@@ -701,6 +725,18 @@ describe("inferConfig modes and pairs from real-world layouts", () => {
   /** A DTCG file at `path` where every id is a color. */
   const colorFile = (path: string, ids: string[]) => ({ ...colors(ids), path });
   const semantic = ["color.text.default", "color.bg.canvas", "color.bg.subtle"];
+
+  it("loads the main file first for an alternative that only overrides some of its tokens", () => {
+    const scale = Array.from({ length: 9 }, (_, index) => `base.neutral.${index}`);
+    const config = inferConfig([
+      colorFile("base/dark.json5", [...semantic, ...scale]),
+      colorFile("base/dark.dimmed.json5", [...semantic, ...scale.slice(0, 7)]),
+    ]);
+    expect(config.modes).toEqual([
+      { name: "dark", sources: ["base/dark.json5"] },
+      { name: "dark-dimmed", sources: ["base/dark.json5", "base/dark.dimmed.json5"] },
+    ]);
+  });
 
   it("makes alternatives in one theme their own modes instead of layering them", () => {
     const config = inferConfig([

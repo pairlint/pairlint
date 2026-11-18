@@ -68,10 +68,11 @@ const SKIP_DIRS = new Set([
   "storybook-static",
 ]);
 const SKIP_FILES =
-  /^(package(-lock)?|tsconfig.*|jsconfig|composer|bower|lerna|turbo|nx|vercel|renovate|biome|pairlint\..*|.*\.schema|.*\.min)\.(json|css)$/i;
+  /^(package(-lock)?|tsconfig.*|jsconfig|composer|bower|lerna|turbo|nx|vercel|renovate|biome|pairlint\..*|.*\.schema|.*\.min)\.(json5?|css)$/i;
 
 /**
- * Finds token files below `root`: JSON files with tokens and CSS files with custom properties.
+ * Finds token files below `root`: JSON and JSON5 files with tokens and CSS files with custom
+ * properties.
  * It skips hidden folders, dependencies and build output, does not follow symlinks, and reads at
  * most MAX_FILES files.
  */
@@ -95,7 +96,8 @@ export function findTokenFiles(root: string): SourceFile[] {
         continue;
       }
       const ext = extname(entry.name).toLowerCase();
-      if (!entry.isFile() || (ext !== ".json" && ext !== ".css") || SKIP_FILES.test(entry.name)) {
+      const known = ext === ".json" || ext === ".json5" || ext === ".css";
+      if (!entry.isFile() || !known || SKIP_FILES.test(entry.name)) {
         continue;
       }
       seen++;
@@ -233,7 +235,7 @@ function readSources(
     file.path
       .split("/")
       .pop()
-      ?.replace(/\.json$/i, "") ?? file.path;
+      ?.replace(/\.json5?$/i, "") ?? file.path;
   return [{ entry: file.path, theme: themeOf(name), colors }];
 }
 
