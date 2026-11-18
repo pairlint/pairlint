@@ -1,0 +1,4 @@
+{
+  "tokens": ["tokens.json"],
+  "pairs": [{ "fg": "text.*", "bg": "bg" }]
+}

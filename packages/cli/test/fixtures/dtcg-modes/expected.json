@@ -1,0 +1,689 @@
+{
+  "schemaVersion": 1,
+  "level": "AA",
+  "modes": [
+    "light",
+    "dark"
+  ],
+  "summary": {
+    "checked": 30,
+    "passed": 20,
+    "failed": 4,
+    "exempt": 6,
+    "errors": 0,
+    "warnings": 1
+  },
+  "results": [
+    {
+      "mode": "light",
+      "fg": "color.border.default",
+      "bg": "color.surface.base",
+      "use": "ui",
+      "status": "pass",
+      "fgLocation": {
+        "file": "tokens/light.json",
+        "line": 16,
+        "column": 7
+      },
+      "bgLocation": {
+        "file": "tokens/light.json",
+        "line": 11,
+        "column": 7
+      },
+      "ratio": 3.6837621530602522,
+      "required": 3,
+      "criterion": "1.4.11",
+      "criterionLevel": "AA",
+      "fgColor": "#80868b",
+      "bgColor": "#ffffff"
+    },
+    {
+      "mode": "light",
+      "fg": "color.border.default",
+      "bg": "color.surface.overlay",
+      "use": "ui",
+      "status": "pass",
+      "fgLocation": {
+        "file": "tokens/light.json",
+        "line": 16,
+        "column": 7
+      },
+      "bgLocation": {
+        "file": "tokens/light.json",
+        "line": 13,
+        "column": 7
+      },
+      "ratio": 3.090044512017158,
+      "required": 3,
+      "criterion": "1.4.11",
+      "criterionLevel": "AA",
+      "fgColor": "#80868b",
+      "bgColor": "#ebebeb"
+    },
+    {
+      "mode": "light",
+      "fg": "color.border.default",
+      "bg": "color.surface.raised",
+      "use": "ui",
+      "status": "pass",
+      "fgLocation": {
+        "file": "tokens/light.json",
+        "line": 16,
+        "column": 7
+      },
+      "bgLocation": {
+        "file": "tokens/light.json",
+        "line": 12,
+        "column": 7
+      },
+      "ratio": 3.4946605980015453,
+      "required": 3,
+      "criterion": "1.4.11",
+      "criterionLevel": "AA",
+      "fgColor": "#80868b",
+      "bgColor": "#f8f9fa"
+    },
+    {
+      "mode": "light",
+      "fg": "color.text.link",
+      "bg": "color.surface.base",
+      "use": "body",
+      "status": "pass",
+      "fgLocation": {
+        "file": "tokens/light.json",
+        "line": 8,
+        "column": 7
+      },
+      "bgLocation": {
+        "file": "tokens/light.json",
+        "line": 11,
+        "column": 7
+      },
+      "ratio": 6.237879394891829,
+      "required": 4.5,
+      "criterion": "1.4.3",
+      "criterionLevel": "AA",
+      "fgColor": "#0559d2",
+      "bgColor": "#ffffff"
+    },
+    {
+      "mode": "light",
+      "fg": "color.text.link",
+      "bg": "color.surface.overlay",
+      "use": "body",
+      "status": "pass",
+      "fgLocation": {
+        "file": "tokens/light.json",
+        "line": 8,
+        "column": 7
+      },
+      "bgLocation": {
+        "file": "tokens/light.json",
+        "line": 13,
+        "column": 7
+      },
+      "ratio": 5.232510729499081,
+      "required": 4.5,
+      "criterion": "1.4.3",
+      "criterionLevel": "AA",
+      "fgColor": "#0559d2",
+      "bgColor": "#ebebeb"
+    },
+    {
+      "mode": "light",
+      "fg": "color.text.link",
+      "bg": "color.surface.raised",
+      "use": "body",
+      "status": "pass",
+      "fgLocation": {
+        "file": "tokens/light.json",
+        "line": 8,
+        "column": 7
+      },
+      "bgLocation": {
+        "file": "tokens/light.json",
+        "line": 12,
+        "column": 7
+      },
+      "ratio": 5.917665264654682,
+      "required": 4.5,
+      "criterion": "1.4.3",
+      "criterionLevel": "AA",
+      "fgColor": "#0559d2",
+      "bgColor": "#f8f9fa"
+    },
+    {
+      "mode": "light",
+      "fg": "color.text.primary",
+      "bg": "color.surface.base",
+      "use": "body",
+      "status": "pass",
+      "fgLocation": {
+        "file": "tokens/light.json",
+        "line": 5,
+        "column": 7
+      },
+      "bgLocation": {
+        "file": "tokens/light.json",
+        "line": 11,
+        "column": 7
+      },
+      "ratio": 16.098951261824404,
+      "required": 4.5,
+      "criterion": "1.4.3",
+      "criterionLevel": "AA",
+      "fgColor": "#202124",
+      "bgColor": "#ffffff"
+    },
+    {
+      "mode": "light",
+      "fg": "color.text.primary",
+      "bg": "color.surface.overlay",
+      "use": "body",
+      "status": "pass",
+      "fgLocation": {
+        "file": "tokens/light.json",
+        "line": 5,
+        "column": 7
+      },
+      "bgLocation": {
+        "file": "tokens/light.json",
+        "line": 13,
+        "column": 7
+      },
+      "ratio": 13.504258399122145,
+      "required": 4.5,
+      "criterion": "1.4.3",
+      "criterionLevel": "AA",
+      "fgColor": "#202124",
+      "bgColor": "#ebebeb"
+    },
+    {
+      "mode": "light",
+      "fg": "color.text.primary",
+      "bg": "color.surface.raised",
+      "use": "body",
+      "status": "pass",
+      "fgLocation": {
+        "file": "tokens/light.json",
+        "line": 5,
+        "column": 7
+      },
+      "bgLocation": {
+        "file": "tokens/light.json",
+        "line": 12,
+        "column": 7
+      },
+      "ratio": 15.272530718930158,
+      "required": 4.5,
+      "criterion": "1.4.3",
+      "criterionLevel": "AA",
+      "fgColor": "#202124",
+      "bgColor": "#f8f9fa"
+    },
+    {
+      "mode": "light",
+      "fg": "color.text.secondary",
+      "bg": "color.surface.base",
+      "use": "body",
+      "status": "pass",
+      "fgLocation": {
+        "file": "tokens/light.json",
+        "line": 6,
+        "column": 7
+      },
+      "bgLocation": {
+        "file": "tokens/light.json",
+        "line": 11,
+        "column": 7
+      },
+      "ratio": 6.049762685939967,
+      "required": 4.5,
+      "criterion": "1.4.3",
+      "criterionLevel": "AA",
+      "fgColor": "#5f6368",
+      "bgColor": "#ffffff"
+    },
+    {
+      "mode": "light",
+      "fg": "color.text.secondary",
+      "bg": "color.surface.overlay",
+      "use": "body",
+      "status": "pass",
+      "fgLocation": {
+        "file": "tokens/light.json",
+        "line": 6,
+        "column": 7
+      },
+      "bgLocation": {
+        "file": "tokens/light.json",
+        "line": 13,
+        "column": 7
+      },
+      "ratio": 5.074713081344048,
+      "required": 4.5,
+      "criterion": "1.4.3",
+      "criterionLevel": "AA",
+      "fgColor": "#5f6368",
+      "bgColor": "#ebebeb"
+    },
+    {
+      "mode": "light",
+      "fg": "color.text.secondary",
+      "bg": "color.surface.raised",
+      "use": "body",
+      "status": "pass",
+      "fgLocation": {
+        "file": "tokens/light.json",
+        "line": 6,
+        "column": 7
+      },
+      "bgLocation": {
+        "file": "tokens/light.json",
+        "line": 12,
+        "column": 7
+      },
+      "ratio": 5.7392053035375765,
+      "required": 4.5,
+      "criterion": "1.4.3",
+      "criterionLevel": "AA",
+      "fgColor": "#5f6368",
+      "bgColor": "#f8f9fa"
+    },
+    {
+      "mode": "light",
+      "fg": "color.text.disabled",
+      "bg": "color.surface.base",
+      "use": "exempt",
+      "status": "exempt",
+      "reason": "Disabled controls are exempt from WCAG 1.4.3",
+      "fgLocation": {
+        "file": "tokens/light.json",
+        "line": 7,
+        "column": 7
+      },
+      "bgLocation": {
+        "file": "tokens/light.json",
+        "line": 11,
+        "column": 7
+      }
+    },
+    {
+      "mode": "light",
+      "fg": "color.text.disabled",
+      "bg": "color.surface.overlay",
+      "use": "exempt",
+      "status": "exempt",
+      "reason": "Disabled controls are exempt from WCAG 1.4.3",
+      "fgLocation": {
+        "file": "tokens/light.json",
+        "line": 7,
+        "column": 7
+      },
+      "bgLocation": {
+        "file": "tokens/light.json",
+        "line": 13,
+        "column": 7
+      }
+    },
+    {
+      "mode": "light",
+      "fg": "color.text.disabled",
+      "bg": "color.surface.raised",
+      "use": "exempt",
+      "status": "exempt",
+      "reason": "Disabled controls are exempt from WCAG 1.4.3",
+      "fgLocation": {
+        "file": "tokens/light.json",
+        "line": 7,
+        "column": 7
+      },
+      "bgLocation": {
+        "file": "tokens/light.json",
+        "line": 12,
+        "column": 7
+      }
+    },
+    {
+      "mode": "dark",
+      "fg": "color.border.default",
+      "bg": "color.surface.overlay",
+      "use": "ui",
+      "status": "fail",
+      "fgLocation": {
+        "file": "tokens/dark.json",
+        "line": 16,
+        "column": 7
+      },
+      "bgLocation": {
+        "file": "tokens/dark.json",
+        "line": 13,
+        "column": 7
+      },
+      "ratio": 2.230740189155122,
+      "required": 3,
+      "criterion": "1.4.11",
+      "criterionLevel": "AA",
+      "fgColor": "#5f6368",
+      "bgColor": "#2e2e2e"
+    },
+    {
+      "mode": "dark",
+      "fg": "color.border.default",
+      "bg": "color.surface.raised",
+      "use": "ui",
+      "status": "fail",
+      "fgLocation": {
+        "file": "tokens/dark.json",
+        "line": 16,
+        "column": 7
+      },
+      "bgLocation": {
+        "file": "tokens/dark.json",
+        "line": 12,
+        "column": 7
+      },
+      "ratio": 2.661088062055622,
+      "required": 3,
+      "criterion": "1.4.11",
+      "criterionLevel": "AA",
+      "fgColor": "#5f6368",
+      "bgColor": "#202124"
+    },
+    {
+      "mode": "dark",
+      "fg": "color.text.secondary",
+      "bg": "color.surface.overlay",
+      "use": "body",
+      "status": "fail",
+      "fgLocation": {
+        "file": "tokens/dark.json",
+        "line": 6,
+        "column": 7
+      },
+      "bgLocation": {
+        "file": "tokens/dark.json",
+        "line": 13,
+        "column": 7
+      },
+      "ratio": 3.663496229572287,
+      "required": 4.5,
+      "criterion": "1.4.3",
+      "criterionLevel": "AA",
+      "fgColor": "#80868b",
+      "bgColor": "#2e2e2e"
+    },
+    {
+      "mode": "dark",
+      "fg": "color.text.secondary",
+      "bg": "color.surface.raised",
+      "use": "body",
+      "status": "fail",
+      "fgLocation": {
+        "file": "tokens/dark.json",
+        "line": 6,
+        "column": 7
+      },
+      "bgLocation": {
+        "file": "tokens/dark.json",
+        "line": 12,
+        "column": 7
+      },
+      "ratio": 4.370247207315039,
+      "required": 4.5,
+      "criterion": "1.4.3",
+      "criterionLevel": "AA",
+      "fgColor": "#80868b",
+      "bgColor": "#202124"
+    },
+    {
+      "mode": "dark",
+      "fg": "color.border.default",
+      "bg": "color.surface.base",
+      "use": "ui",
+      "status": "pass",
+      "fgLocation": {
+        "file": "tokens/dark.json",
+        "line": 16,
+        "column": 7
+      },
+      "bgLocation": {
+        "file": "tokens/dark.json",
+        "line": 11,
+        "column": 7
+      },
+      "ratio": 3.096594837751044,
+      "required": 3,
+      "criterion": "1.4.11",
+      "criterionLevel": "AA",
+      "fgColor": "#5f6368",
+      "bgColor": "#121212"
+    },
+    {
+      "mode": "dark",
+      "fg": "color.text.link",
+      "bg": "color.surface.base",
+      "use": "body",
+      "status": "pass",
+      "fgLocation": {
+        "file": "tokens/dark.json",
+        "line": 8,
+        "column": 7
+      },
+      "bgLocation": {
+        "file": "tokens/dark.json",
+        "line": 11,
+        "column": 7
+      },
+      "ratio": 9.088885870170158,
+      "required": 4.5,
+      "criterion": "1.4.3",
+      "criterionLevel": "AA",
+      "fgColor": "#00c2ff",
+      "bgColor": "#121212"
+    },
+    {
+      "mode": "dark",
+      "fg": "color.text.link",
+      "bg": "color.surface.overlay",
+      "use": "body",
+      "status": "pass",
+      "fgLocation": {
+        "file": "tokens/dark.json",
+        "line": 8,
+        "column": 7
+      },
+      "bgLocation": {
+        "file": "tokens/dark.json",
+        "line": 13,
+        "column": 7
+      },
+      "ratio": 6.547496216830782,
+      "required": 4.5,
+      "criterion": "1.4.3",
+      "criterionLevel": "AA",
+      "fgColor": "#00c2ff",
+      "bgColor": "#2e2e2e"
+    },
+    {
+      "mode": "dark",
+      "fg": "color.text.link",
+      "bg": "color.surface.raised",
+      "use": "body",
+      "status": "pass",
+      "fgLocation": {
+        "file": "tokens/dark.json",
+        "line": 8,
+        "column": 7
+      },
+      "bgLocation": {
+        "file": "tokens/dark.json",
+        "line": 12,
+        "column": 7
+      },
+      "ratio": 7.810620037092605,
+      "required": 4.5,
+      "criterion": "1.4.3",
+      "criterionLevel": "AA",
+      "fgColor": "#00c2ff",
+      "bgColor": "#202124"
+    },
+    {
+      "mode": "dark",
+      "fg": "color.text.primary",
+      "bg": "color.surface.base",
+      "use": "body",
+      "status": "pass",
+      "fgLocation": {
+        "file": "tokens/dark.json",
+        "line": 5,
+        "column": 7
+      },
+      "bgLocation": {
+        "file": "tokens/dark.json",
+        "line": 11,
+        "column": 7
+      },
+      "ratio": 17.771993515727875,
+      "required": 4.5,
+      "criterion": "1.4.3",
+      "criterionLevel": "AA",
+      "fgColor": "#f8f9fa",
+      "bgColor": "#121212"
+    },
+    {
+      "mode": "dark",
+      "fg": "color.text.primary",
+      "bg": "color.surface.overlay",
+      "use": "body",
+      "status": "pass",
+      "fgLocation": {
+        "file": "tokens/dark.json",
+        "line": 5,
+        "column": 7
+      },
+      "bgLocation": {
+        "file": "tokens/dark.json",
+        "line": 13,
+        "column": 7
+      },
+      "ratio": 12.802675924413492,
+      "required": 4.5,
+      "criterion": "1.4.3",
+      "criterionLevel": "AA",
+      "fgColor": "#f8f9fa",
+      "bgColor": "#2e2e2e"
+    },
+    {
+      "mode": "dark",
+      "fg": "color.text.primary",
+      "bg": "color.surface.raised",
+      "use": "body",
+      "status": "pass",
+      "fgLocation": {
+        "file": "tokens/dark.json",
+        "line": 5,
+        "column": 7
+      },
+      "bgLocation": {
+        "file": "tokens/dark.json",
+        "line": 12,
+        "column": 7
+      },
+      "ratio": 15.272530718930158,
+      "required": 4.5,
+      "criterion": "1.4.3",
+      "criterionLevel": "AA",
+      "fgColor": "#f8f9fa",
+      "bgColor": "#202124"
+    },
+    {
+      "mode": "dark",
+      "fg": "color.text.secondary",
+      "bg": "color.surface.base",
+      "use": "body",
+      "status": "pass",
+      "fgLocation": {
+        "file": "tokens/dark.json",
+        "line": 6,
+        "column": 7
+      },
+      "bgLocation": {
+        "file": "tokens/dark.json",
+        "line": 11,
+        "column": 7
+      },
+      "ratio": 5.08547053922517,
+      "required": 4.5,
+      "criterion": "1.4.3",
+      "criterionLevel": "AA",
+      "fgColor": "#80868b",
+      "bgColor": "#121212"
+    },
+    {
+      "mode": "dark",
+      "fg": "color.text.disabled",
+      "bg": "color.surface.base",
+      "use": "exempt",
+      "status": "exempt",
+      "reason": "Disabled controls are exempt from WCAG 1.4.3",
+      "fgLocation": {
+        "file": "tokens/dark.json",
+        "line": 7,
+        "column": 7
+      },
+      "bgLocation": {
+        "file": "tokens/dark.json",
+        "line": 11,
+        "column": 7
+      }
+    },
+    {
+      "mode": "dark",
+      "fg": "color.text.disabled",
+      "bg": "color.surface.overlay",
+      "use": "exempt",
+      "status": "exempt",
+      "reason": "Disabled controls are exempt from WCAG 1.4.3",
+      "fgLocation": {
+        "file": "tokens/dark.json",
+        "line": 7,
+        "column": 7
+      },
+      "bgLocation": {
+        "file": "tokens/dark.json",
+        "line": 13,
+        "column": 7
+      }
+    },
+    {
+      "mode": "dark",
+      "fg": "color.text.disabled",
+      "bg": "color.surface.raised",
+      "use": "exempt",
+      "status": "exempt",
+      "reason": "Disabled controls are exempt from WCAG 1.4.3",
+      "fgLocation": {
+        "file": "tokens/dark.json",
+        "line": 7,
+        "column": 7
+      },
+      "bgLocation": {
+        "file": "tokens/dark.json",
+        "line": 12,
+        "column": 7
+      }
+    }
+  ],
+  "warnings": [
+    {
+      "mode": "dark",
+      "message": "color.text.link is outside the sRGB gamut, so results that use it are approximate",
+      "location": {
+        "file": "tokens/dark.json",
+        "line": 8,
+        "column": 7
+      }
+    }
+  ]
+}

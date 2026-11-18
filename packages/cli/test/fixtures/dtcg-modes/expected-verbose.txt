@@ -1,0 +1,47 @@
+light
+  ✓ color.border.default on color.surface.base  3.68:1 (#80868b on #ffffff)
+  ✓ color.border.default on color.surface.overlay  3.09:1 (#80868b on #ebebeb)
+  ✓ color.border.default on color.surface.raised  3.49:1 (#80868b on #f8f9fa)
+  ✓ color.text.link on color.surface.base  6.23:1 (#0559d2 on #ffffff)
+  ✓ color.text.link on color.surface.overlay  5.23:1 (#0559d2 on #ebebeb)
+  ✓ color.text.link on color.surface.raised  5.91:1 (#0559d2 on #f8f9fa)
+  ✓ color.text.primary on color.surface.base  16.09:1 (#202124 on #ffffff)
+  ✓ color.text.primary on color.surface.overlay  13.50:1 (#202124 on #ebebeb)
+  ✓ color.text.primary on color.surface.raised  15.27:1 (#202124 on #f8f9fa)
+  ✓ color.text.secondary on color.surface.base  6.04:1 (#5f6368 on #ffffff)
+  ✓ color.text.secondary on color.surface.overlay  5.07:1 (#5f6368 on #ebebeb)
+  ✓ color.text.secondary on color.surface.raised  5.73:1 (#5f6368 on #f8f9fa)
+  – color.text.disabled on color.surface.base (exempt: Disabled controls are exempt from WCAG 1.4.3)
+  – color.text.disabled on color.surface.overlay (exempt: Disabled controls are exempt from WCAG 1.4.3)
+  – color.text.disabled on color.surface.raised (exempt: Disabled controls are exempt from WCAG 1.4.3)
+
+dark
+  ✗ color.border.default on color.surface.overlay
+    2.23:1 (#5f6368 on #2e2e2e), needs 3:1 for UI components and graphics (WCAG 1.4.11 AA)
+    tokens/dark.json:16:7
+  ✗ color.border.default on color.surface.raised
+    2.66:1 (#5f6368 on #202124), needs 3:1 for UI components and graphics (WCAG 1.4.11 AA)
+    tokens/dark.json:16:7
+  ✗ color.text.secondary on color.surface.overlay
+    3.66:1 (#80868b on #2e2e2e), needs 4.5:1 for body text (WCAG 1.4.3 AA)
+    tokens/dark.json:6:7
+  ✗ color.text.secondary on color.surface.raised
+    4.37:1 (#80868b on #202124), needs 4.5:1 for body text (WCAG 1.4.3 AA)
+    tokens/dark.json:6:7
+  ✓ color.border.default on color.surface.base  3.09:1 (#5f6368 on #121212)
+  ✓ color.text.link on color.surface.base  9.08:1 (#00c2ff on #121212)
+  ✓ color.text.link on color.surface.overlay  6.54:1 (#00c2ff on #2e2e2e)
+  ✓ color.text.link on color.surface.raised  7.81:1 (#00c2ff on #202124)
+  ✓ color.text.primary on color.surface.base  17.77:1 (#f8f9fa on #121212)
+  ✓ color.text.primary on color.surface.overlay  12.80:1 (#f8f9fa on #2e2e2e)
+  ✓ color.text.primary on color.surface.raised  15.27:1 (#f8f9fa on #202124)
+  ✓ color.text.secondary on color.surface.base  5.08:1 (#80868b on #121212)
+  – color.text.disabled on color.surface.base (exempt: Disabled controls are exempt from WCAG 1.4.3)
+  – color.text.disabled on color.surface.overlay (exempt: Disabled controls are exempt from WCAG 1.4.3)
+  – color.text.disabled on color.surface.raised (exempt: Disabled controls are exempt from WCAG 1.4.3)
+
+Warnings
+  ! dark: color.text.link is outside the sRGB gamut, so results that use it are approximate
+    tokens/dark.json:8:7
+
+4 failed, 20 passed, 6 exempt across 2 modes (WCAG AA)

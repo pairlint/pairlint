@@ -1,0 +1,10 @@
+default
+  ✗ text.garbled on bg
+    Cannot check: text.garbled: "not-a-color" is not a color pairlint understands. Use hex, rgb(), hsl(), oklch(), oklab() or color() with srgb, srgb-linear or display-p3.
+    tokens.json:7:5
+  ✗ text.missing on bg
+    Cannot check: "text.missing" refers to "{palette.nope}", which does not exist
+    tokens.json:6:5
+  ✓ 1 pair passes
+
+2 could not be checked, 0 failed, 1 passed across 1 mode (WCAG AA)

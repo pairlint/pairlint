@@ -1,0 +1,39 @@
+{
+  "name": "@pairlint/tokens-core",
+  "version": "0.1.0",
+  "description": "Format-neutral design token reader: DTCG and Tokens Studio files, aliases, modes and source positions.",
+  "license": "MIT",
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "sideEffects": false,
+  "engines": {
+    "node": ">=22.14"
+  },
+  "keywords": [
+    "design-tokens",
+    "dtcg",
+    "tokens-studio",
+    "design-system"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/pairlint/pairlint.git",
+    "directory": "packages/tokens-core"
+  },
+  "bugs": "https://github.com/pairlint/pairlint/issues",
+  "scripts": {
+    "build": "tsc -p tsconfig.json"
+  },
+  "publishConfig": {
+    "access": "public",
+    "provenance": true
+  }
+}

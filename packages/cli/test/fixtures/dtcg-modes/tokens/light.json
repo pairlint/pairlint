@@ -1,0 +1,19 @@
+{
+  "color": {
+    "$type": "color",
+    "text": {
+      "primary": { "$value": "{color.gray.900}" },
+      "secondary": { "$value": "{color.gray.700}" },
+      "disabled": { "$value": "{color.gray.400}" },
+      "link": { "$value": "{color.blue.600}" }
+    },
+    "surface": {
+      "base": { "$value": "#ffffff" },
+      "raised": { "$value": "{color.gray.50}" },
+      "overlay": { "$value": "#00000014" }
+    },
+    "border": {
+      "default": { "$value": "{color.gray.500}" }
+    }
+  }
+}

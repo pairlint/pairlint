@@ -1,0 +1,33 @@
+import { fileURLToPath } from "node:url";
+import { run } from "../src/index.js";
+
+export const fixture = (name: string) =>
+  fileURLToPath(new URL(`./fixtures/${name}`, import.meta.url));
+
+export interface CliResult {
+  code: number;
+  stdout: string;
+  stderr: string;
+}
+
+export function runCli(
+  argv: string[],
+  options: { cwd: string; env?: Record<string, string>; isTTY?: boolean },
+): CliResult {
+  let stdout = "";
+  let stderr = "";
+  const code = run({
+    argv,
+    cwd: options.cwd,
+    env: options.env ?? {},
+    stdout: (text) => {
+      stdout += text;
+    },
+    stderr: (text) => {
+      stderr += text;
+    },
+    isTTY: options.isTTY ?? false,
+    version: "0.0.0-test",
+  });
+  return { code, stdout, stderr };
+}

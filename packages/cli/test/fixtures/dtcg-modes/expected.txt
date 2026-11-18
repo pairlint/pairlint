@@ -1,0 +1,25 @@
+light
+  ✓ 12 pairs pass
+  – 3 exempt
+
+dark
+  ✗ color.border.default on color.surface.overlay
+    2.23:1 (#5f6368 on #2e2e2e), needs 3:1 for UI components and graphics (WCAG 1.4.11 AA)
+    tokens/dark.json:16:7
+  ✗ color.border.default on color.surface.raised
+    2.66:1 (#5f6368 on #202124), needs 3:1 for UI components and graphics (WCAG 1.4.11 AA)
+    tokens/dark.json:16:7
+  ✗ color.text.secondary on color.surface.overlay
+    3.66:1 (#80868b on #2e2e2e), needs 4.5:1 for body text (WCAG 1.4.3 AA)
+    tokens/dark.json:6:7
+  ✗ color.text.secondary on color.surface.raised
+    4.37:1 (#80868b on #202124), needs 4.5:1 for body text (WCAG 1.4.3 AA)
+    tokens/dark.json:6:7
+  ✓ 8 pairs pass
+  – 3 exempt
+
+Warnings
+  ! dark: color.text.link is outside the sRGB gamut, so results that use it are approximate
+    tokens/dark.json:8:7
+
+4 failed, 20 passed, 6 exempt across 2 modes (WCAG AA)
