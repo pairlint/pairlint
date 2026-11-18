@@ -9,11 +9,12 @@ import {
 } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { parseJson } from "@pairlint/tokens-core";
+import { compileTokenPattern, parseJson } from "@pairlint/tokens-core";
 import { Ajv } from "ajv";
 import { afterAll, describe, expect, it } from "vitest";
 import {
   findTokenFiles,
+  type InferredPair,
   inferConfig,
   parseConfig,
   renderConfig,
@@ -33,6 +34,32 @@ const tempDir = () => {
 
 const json = (path: string, value: unknown) => ({ path, text: JSON.stringify(value, null, 2) });
 const color = (value: string) => ({ $type: "color", $value: value });
+
+/** Every "fg on bg" pair the checked (not exempt) rules produce for these token ids. */
+const checkedPairs = (pairs: InferredPair[], ids: string[]) => {
+  const expand = (patterns: string[]) =>
+    ids.filter((id) => patterns.some((pattern) => compileTokenPattern(pattern)(id)));
+  return pairs
+    .filter((pair) => pair.use !== "exempt")
+    .flatMap((pair) =>
+      expand(pair.fg).flatMap((fg) => expand(pair.bg).map((bg) => `${fg} on ${bg}`)),
+    )
+    .sort();
+};
+/** A flat DTCG file where every id is a color. */
+const colors = (ids: string[]) => {
+  const root: Record<string, unknown> = {};
+  for (const id of ids) {
+    const path = id.split(".");
+    let node = root;
+    for (const part of path.slice(0, -1)) {
+      node[part] ??= {};
+      node = node[part] as Record<string, unknown>;
+    }
+    node[path[path.length - 1] as string] = color("#777777");
+  }
+  return json("t.json", root);
+};
 
 const schema = JSON.parse(readFileSync(new URL("../schema.json", import.meta.url), "utf8"));
 const validate = new Ajv({ strict: true, strictRequired: false, allowUnionTypes: true }).compile(
@@ -87,6 +114,7 @@ describe("roleOf", () => {
     ["Text.Neutral.Subtle on emphasis", "on"],
     ["utrecht.button.color", "fg"],
     ["Shadow.High.Ambient.color", undefined],
+    ["label-red-fgColor", "fg"],
     ["utrecht.button.background-color", "bg"],
     ["utrecht.textbox.border-color", "ui"],
     ["zwolle.color.blue.40", undefined],
@@ -280,13 +308,254 @@ describe("inferConfig", () => {
         brand: { fill: color("#0057ff") },
       }),
     ]);
-    expect(config.pairs).toContainEqual({
-      fg: ["text.on-brand"],
-      bg: ["surface.base"],
-      use: "exempt",
-      reason: "On- colors sit on their own fill, which is checked separately",
-    });
-    expect(config.pairs).toContainEqual({ fg: ["text.on-brand"], bg: ["brand.fill"] });
+    expect(config.pairs).toEqual([
+      { fg: ["text.primary"], bg: ["surface.base"] },
+      { fg: ["text.on-brand"], bg: ["brand.fill"] },
+    ]);
+    expect(config.unpaired).toEqual([]);
+  });
+
+  it("pairs component text with its own component's backgrounds", () => {
+    const ids = [
+      "utrecht.button.color",
+      "utrecht.button.background-color",
+      "utrecht.button.focus.border-color",
+      "utrecht.document.color",
+      "utrecht.document.background-color",
+      "utrecht.link.color",
+    ];
+    const config = inferConfig([colors(ids)]);
+    expect(checkedPairs(config.pairs, ids)).toEqual([
+      "utrecht.button.color on utrecht.button.background-color",
+      // A scope without backgrounds uses the nearest one that has some.
+      "utrecht.button.focus.border-color on utrecht.button.background-color",
+      "utrecht.document.color on utrecht.document.background-color",
+      // No link background, so the page's own.
+      "utrecht.link.color on utrecht.document.background-color",
+    ]);
+    expect(config.pairCount).toBe(4);
+  });
+
+  it("falls back to the shared surfaces, not every component's", () => {
+    const ids = [
+      "color.text.primary",
+      "color.surface.base",
+      "button.primary.fgColor",
+      "button.primary.bgColor",
+      "badge.bgColor",
+    ];
+    const config = inferConfig([colors(ids)]);
+    expect(checkedPairs(config.pairs, ids)).toEqual([
+      "button.primary.fgColor on button.primary.bgColor",
+      "color.text.primary on color.surface.base",
+    ]);
+  });
+
+  it("reads the scope up to the last role word, so a component named label stays a component", () => {
+    const ids = [
+      "fgColor-default",
+      "bgColor-default",
+      "bgColor-black",
+      "label-red-fgColor",
+      "label-red-bgColor",
+      "label-gray-fgColor",
+      "label-gray-bgColor",
+      "page-header-fgColor",
+      "page-header-bgColor",
+    ];
+    expect(checkedPairs(inferConfig([colors(ids)]).pairs, ids)).toEqual([
+      "fgColor-default on bgColor-black",
+      "fgColor-default on bgColor-default",
+      "label-gray-fgColor on label-gray-bgColor",
+      "label-red-fgColor on label-red-bgColor",
+      // "page" names the page only as the last word of a scope, not in page-header.
+      "page-header-fgColor on page-header-bgColor",
+    ]);
+  });
+
+  it("keeps one scope when only modifiers sit between role words", () => {
+    const ids = [
+      "Text.Strong",
+      "Text.Accent.Strong",
+      "Bg.Canvas",
+      "Bg.Accent.Canvas",
+      "Bg.Neutral.Surface",
+    ];
+    expect(checkedPairs(inferConfig([colors(ids)]).pairs, ids)).toEqual([
+      "Text.Accent.Strong on Bg.Accent.Canvas",
+      "Text.Accent.Strong on Bg.Canvas",
+      "Text.Accent.Strong on Bg.Neutral.Surface",
+      "Text.Strong on Bg.Accent.Canvas",
+      "Text.Strong on Bg.Canvas",
+      "Text.Strong on Bg.Neutral.Surface",
+    ]);
+  });
+
+  it("reads a component named after the role word, pairing matching variants", () => {
+    const ids = [
+      "color.text.primary",
+      "color.text.badge.accent",
+      "color.text.decorative.1",
+      "color.text.decorative.2",
+      "color.bg.canvas.default",
+      "color.bg.badge.accent",
+      "color.bg.badge.default",
+      "color.bg.decorative.1",
+      "color.bg.decorative.2",
+    ];
+    const config = inferConfig([colors(ids)]);
+    expect(checkedPairs(config.pairs, ids)).toEqual([
+      "color.text.badge.accent on color.bg.badge.accent",
+      "color.text.decorative.1 on color.bg.decorative.1",
+      "color.text.decorative.2 on color.bg.decorative.2",
+      "color.text.primary on color.bg.canvas.default",
+    ]);
+    // Nothing is meant for the default badge, so it is listed instead of dropped quietly.
+    expect(config.unpaired).toEqual(["color.bg.badge.default"]);
+  });
+
+  it("does not treat stateful fills as a component of plain text", () => {
+    const ids = [
+      "color.text.action.primary",
+      "color.bg.canvas.default",
+      "color.bg.action.primary.rest",
+      "color.bg.action.primary.hovered",
+    ];
+    const pairs = checkedPairs(inferConfig([colors(ids)]).pairs, ids);
+    expect(pairs).toContain("color.text.action.primary on color.bg.canvas.default");
+  });
+
+  it("does not treat color names as components", () => {
+    const ids = ["fgColor-default", "fgColor-white", "bgColor-default", "bgColor-black"];
+    expect(checkedPairs(inferConfig([colors(ids)]).pairs, ids)).toEqual([
+      "fgColor-default on bgColor-black",
+      "fgColor-default on bgColor-default",
+      "fgColor-white on bgColor-black",
+      "fgColor-white on bgColor-default",
+    ]);
+  });
+
+  it("keeps different intents apart", () => {
+    const ids = [
+      "color.text.primary",
+      "color.text.success",
+      "color.text.critical",
+      "color.bg.canvas",
+      "color.bg.success.subtle",
+      "color.bg.critical.subtle",
+    ];
+    const pairs = checkedPairs(inferConfig([colors(ids)]).pairs, ids);
+    expect(pairs).toContain("color.text.primary on color.bg.success.subtle");
+    expect(pairs).toContain("color.text.success on color.bg.success.subtle");
+    expect(pairs).toContain("color.text.success on color.bg.canvas");
+    expect(pairs).not.toContain("color.text.success on color.bg.critical.subtle");
+    expect(pairs).not.toContain("color.text.critical on color.bg.success.subtle");
+    expect(pairs).toHaveLength(7);
+  });
+
+  it("keeps different states apart", () => {
+    const ids = [
+      "button.text.hover",
+      "button.text.pressed",
+      "button.text.default",
+      "button.bg.hover",
+      "button.bg.pressed",
+    ];
+    expect(checkedPairs(inferConfig([colors(ids)]).pairs, ids)).toEqual([
+      "button.text.default on button.bg.hover",
+      "button.text.default on button.bg.pressed",
+      "button.text.hover on button.bg.hover",
+      "button.text.pressed on button.bg.pressed",
+    ]);
+  });
+
+  it("checks strong fills only against their on- colors", () => {
+    const ids = [
+      "fgColor-default",
+      "fgColor-onEmphasis",
+      "bgColor-default",
+      "bgColor-accent-muted",
+      "bgColor-accent-emphasis",
+    ];
+    expect(checkedPairs(inferConfig([colors(ids)]).pairs, ids)).toEqual([
+      "fgColor-default on bgColor-accent-muted",
+      "fgColor-default on bgColor-default",
+      "fgColor-onEmphasis on bgColor-accent-emphasis",
+    ]);
+  });
+
+  it("prefers fills with the on- color's intent", () => {
+    const ids = [
+      "Text.Default",
+      "Text.Accent.Strong on emphasis",
+      "Bg.Canvas",
+      "Bg.Accent.Fill Emphasis.Default",
+      "Bg.Danger.Fill Emphasis.Default",
+    ];
+    const pairs = checkedPairs(inferConfig([colors(ids)]).pairs, ids);
+    expect(pairs).toContain("Text.Accent.Strong on emphasis on Bg.Accent.Fill Emphasis.Default");
+    expect(pairs).not.toContain(
+      "Text.Accent.Strong on emphasis on Bg.Danger.Fill Emphasis.Default",
+    );
+  });
+
+  it("reads backgrounds marked primary as fills when no background names the on- color's fill", () => {
+    const ids = [
+      "color.text.primary",
+      "color.text.on-solid.primary",
+      "color.bg.canvas.default",
+      "color.bg.subtle-primary",
+      "color.bg.action.primary.rest",
+      "color.bg.action.primary.hovered",
+      "color.bg.critical.primary",
+      "color.bg.critical.hovered",
+      "color.bg.critical.subtle",
+      "color.bg.critical.subtle-hovered",
+      "color.bg.accent.rest",
+      "color.bg.accent.selected",
+      "color.bg.accent.subtle",
+      "color.bg.info.rest",
+    ];
+    const config = inferConfig([colors(ids)]);
+    expect(checkedPairs(config.pairs, ids)).toEqual([
+      "color.text.on-solid.primary on color.bg.accent.rest",
+      "color.text.on-solid.primary on color.bg.action.primary.hovered",
+      "color.text.on-solid.primary on color.bg.action.primary.rest",
+      "color.text.on-solid.primary on color.bg.critical.hovered",
+      "color.text.on-solid.primary on color.bg.critical.primary",
+      // Selected is a light state, and info has no subtle or primary background to show that its
+      // resting color is a fill, so both stay surfaces.
+      "color.text.primary on color.bg.accent.selected",
+      "color.text.primary on color.bg.accent.subtle",
+      "color.text.primary on color.bg.canvas.default",
+      "color.text.primary on color.bg.critical.subtle",
+      "color.text.primary on color.bg.critical.subtle-hovered",
+      "color.text.primary on color.bg.info.rest",
+      "color.text.primary on color.bg.subtle-primary",
+    ]);
+    expect(config.unpaired).toEqual([]);
+  });
+
+  it("keeps backgrounds marked primary as surfaces when on- colors find their fills by name", () => {
+    const ids = ["fgColor-default", "fgColor-onEmphasis", "bgColor-emphasis", "bgColor-primary"];
+    expect(checkedPairs(inferConfig([colors(ids)]).pairs, ids)).toEqual([
+      "fgColor-default on bgColor-primary",
+      "fgColor-onEmphasis on bgColor-emphasis",
+    ]);
+  });
+
+  it("lists text and fills it could not pair, and writes them into the config", () => {
+    const ids = [
+      "color.text.primary",
+      "color.text.inverse",
+      "color.surface.base",
+      "color.bg.solid",
+    ];
+    const config = inferConfig([colors(ids)]);
+    expect(config.unpaired).toEqual(["color.bg.solid", "color.text.inverse"]);
+    expect(renderConfig(config, "./schema.json")).toContain(
+      "// Not paired, so not checked: color.bg.solid, color.text.inverse.",
+    );
   });
 
   it("never widens a pattern over tokens with another role", () => {
