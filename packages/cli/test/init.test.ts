@@ -696,3 +696,240 @@ describe("pairlint init", () => {
     expect(result.stderr).toContain('--force only works with "pairlint init"');
   });
 });
+
+describe("inferConfig modes and pairs from real-world layouts", () => {
+  /** A DTCG file at `path` where every id is a color. */
+  const colorFile = (path: string, ids: string[]) => ({ ...colors(ids), path });
+  const semantic = ["color.text.default", "color.bg.canvas", "color.bg.subtle"];
+
+  it("makes alternatives in one theme their own modes instead of layering them", () => {
+    const config = inferConfig([
+      colorFile("themes/light.json", semantic),
+      colorFile("themes/light-colorblind.json", semantic),
+      colorFile("themes/dark.json", semantic),
+      colorFile("themes/dark-dimmed.json", semantic),
+      colorFile("themes/dark-overrides.json", ["color.text.link"]),
+    ]);
+    expect(config.modes.map((mode) => mode.name)).toEqual([
+      "light",
+      "light-colorblind",
+      "dark",
+      "dark-dimmed",
+    ]);
+    const dimmed = config.modes.find((mode) => mode.name === "dark-dimmed");
+    // A file with other ids is a layer, so every dark mode loads it.
+    expect(dimmed?.sources).toEqual(["themes/dark-overrides.json", "themes/dark-dimmed.json"]);
+  });
+
+  it("keeps same-named files in different folders as layers", () => {
+    const config = inferConfig([
+      colorFile("a/Concept.Mode 1.json", semantic),
+      colorFile("a/Elevation.json", ["shade.1", "shade.2", "shade.3", "shade.4"]),
+      colorFile("b/Concept.Mode 1.json", semantic),
+      colorFile("b/Primitives.json", ["blue.1", "blue.2", "blue.3", "blue.4"]),
+    ]);
+    expect(config.modes.map((mode) => mode.name)).toEqual(["default"]);
+  });
+
+  it("writes alternatives outside any theme as their own group", () => {
+    const appearance = ["Bg.Fill.Emphasis.Default", "Text.Strong on emphasis", "Text.Subtle"];
+    const config = inferConfig([
+      colorFile("t/Color scheme.Light.json", semantic),
+      colorFile("t/Color scheme.Dark.json", semantic),
+      colorFile("t/Appearance.Accent.json", appearance),
+      colorFile("t/Appearance.Danger.json", appearance),
+    ]);
+    expect(config.modes.map((mode) => mode.name)).toEqual([
+      "light/accent",
+      "light/danger",
+      "dark/accent",
+      "dark/danger",
+    ]);
+    const text = renderConfig(config, "./schema.json");
+    expect(text).toContain("// 4 modes: 2 theme × 2 appearance.");
+    expect(text).toContain('    "appearance": {');
+    expect(text).toContain('      "accent": "t/Appearance.Accent.json",');
+    const parsed = parseConfig(text, "pairlint.config.json");
+    expect(parsed.modes.map((mode) => mode.name)).toEqual(config.modes.map((mode) => mode.name));
+  });
+
+  it("detects brand folders that define the same tokens", () => {
+    const brand = ["button.color", "button.background-color", "document.color"];
+    const config = inferConfig([
+      colorFile("shared/base.json", ["document.background-color"]),
+      colorFile("brands/acme-tokens/src/color.json", brand),
+      colorFile("brands/acme-tokens/src/extra.json", ["acme.brand.fill"]),
+      colorFile("brands/zen-tokens/src/color.json", brand),
+      colorFile("brands/odd-tokens/src/color.json", [...brand.slice(0, 1), "odd.a", "odd.b"]),
+    ]);
+    expect(config.plan.axes.map((axis) => [axis.name, axis.values.map((v) => v.name)])).toEqual([
+      ["brand", ["acme", "odd", "zen"]],
+    ]);
+    expect(config.modes.find((mode) => mode.name === "acme")?.sources).toEqual([
+      "shared/base.json",
+      "brands/acme-tokens/src/color.json",
+      "brands/acme-tokens/src/extra.json",
+    ]);
+  });
+
+  it("does not take theme folders for brands", () => {
+    const config = inferConfig([
+      colorFile("tokens/light/color.json", semantic),
+      colorFile("tokens/dark/color.json", semantic),
+    ]);
+    expect(config.plan.axes.some((axis) => axis.kind === "brand")).toBe(false);
+  });
+
+  it("prefers the themes in a Tokens Studio $themes.json", () => {
+    const config = inferConfig([
+      colorFile("core/color.json", ["palette.white", "palette.black"]),
+      colorFile("semantic/day.json", semantic),
+      colorFile("semantic/night.json", semantic),
+      json("$metadata.json", { tokenSetOrder: ["core/color", "semantic/day", "semantic/night"] }),
+      json("$themes.json", [
+        {
+          id: "1",
+          name: "\u{1F31E} Brand Light",
+          group: "color",
+          selectedTokenSets: { "core/color": "source", "semantic/day": "enabled" },
+        },
+        {
+          id: "2",
+          name: "\u{1F31A} Brand Dark",
+          group: "color",
+          selectedTokenSets: { "core/color": "source", "semantic/night": "enabled" },
+        },
+        { id: "3", name: "Mode 1", group: "core", selectedTokenSets: { "core/color": "enabled" } },
+        { id: "4", name: "Off", group: "size", selectedTokenSets: { "semantic/day": "disabled" } },
+      ]),
+    ]);
+    expect(config.modes).toEqual([
+      { name: "light", sources: ["core/color.json", "semantic/day.json"] },
+      { name: "dark", sources: ["core/color.json", "semantic/night.json"] },
+    ]);
+    expect(renderConfig(config, "./schema.json")).toContain(
+      "// 2 modes, from the themes in $themes.json.",
+    );
+  });
+
+  it("falls back to names when $themes.json names none of the files", () => {
+    const config = inferConfig([
+      colorFile("light.json", semantic),
+      colorFile("dark.json", semantic),
+      json("$themes.json", [{ name: "X", selectedTokenSets: { missing: "enabled" } }]),
+    ]);
+    expect(config.fromThemesFile).toBe(false);
+    expect(config.modes.map((mode) => mode.name)).toEqual(["light", "dark"]);
+  });
+
+  it("writes the page background as the base of dark modes", () => {
+    const config = inferConfig([
+      colorFile("light.json", [...semantic, "page-header-bgColor", "color.bg.critical"]),
+      colorFile("dark.json", semantic),
+    ]);
+    expect(config.canvas).toBe("color.bg.canvas");
+    expect(renderConfig(config, "./schema.json")).toContain(
+      '  "base": { "dark": "{color.bg.canvas}" },',
+    );
+    const light = inferConfig([colorFile("tokens.json", semantic)]);
+    expect(renderConfig(light, "./schema.json")).not.toContain('"base"');
+  });
+
+  it("does not take a component named page for the page background", () => {
+    const ids = ["fgColor-default", "bgColor-default", "page-header-bgColor"];
+    const config = inferConfig([colorFile("light.json", ids), colorFile("dark.json", ids)]);
+    expect(config.canvas).toBe("bgColor-default");
+  });
+
+  it("pairs inverse text only with inverse backgrounds", () => {
+    const ids = [
+      "color.text.1",
+      "color.text.inverse",
+      "color.background.default",
+      "color.inverse.1",
+    ];
+    expect(checkedPairs(inferConfig([colors(ids)]).pairs, ids)).toEqual([
+      "color.text.1 on color.background.default",
+      "color.text.inverse on color.inverse.1",
+    ]);
+    const lonely = ["color.text.1", "color.text.inverse", "color.background.default"];
+    const config = inferConfig([colors(lonely)]);
+    expect(checkedPairs(config.pairs, lonely)).toEqual([
+      "color.text.1 on color.background.default",
+    ]);
+    expect(config.unpaired).toEqual(["color.text.inverse"]);
+  });
+
+  it("reads foreground as a raised layer when the system also has text tokens", () => {
+    const ids = ["color.text.1", "color.background.default", "color.foreground.1"];
+    expect(checkedPairs(inferConfig([colors(ids)]).pairs, ids)).toEqual([
+      "color.text.1 on color.background.default",
+      "color.text.1 on color.foreground.1",
+    ]);
+    const shadcn = ["foreground", "background", "card-foreground", "card"];
+    expect(checkedPairs(inferConfig([colors(shadcn)]).pairs, shadcn)).toContain(
+      "foreground on background",
+    );
+  });
+
+  it("exempts divider, separator and subtle borders with a reason", () => {
+    const ids = [
+      "color.text.default",
+      "color.bg.canvas",
+      "color.border.default",
+      "color.border.subtle",
+      "color.divider",
+      "color.separator.primary",
+    ];
+    const config = inferConfig([colors(ids)]);
+    const exempt = config.pairs.filter((pair) => pair.reason?.startsWith("Decorative"));
+    // An exempt rule overrides a broader checked one, as it does in the check.
+    const skipped = new Set(
+      checkedPairs(
+        exempt.map((pair) => ({ ...pair, use: undefined })),
+        ids,
+      ),
+    );
+    expect(checkedPairs(config.pairs, ids).filter((pair) => !skipped.has(pair))).toEqual([
+      "color.border.default on color.bg.canvas",
+      "color.text.default on color.bg.canvas",
+    ]);
+    expect(exempt.flatMap((pair) => pair.fg).sort()).toEqual([
+      "color.border.subtle",
+      "color.divider",
+      "color.separator.primary",
+    ]);
+    expect(exempt[0]?.use).toBe("exempt");
+    expect(config.pairCount).toBe(2);
+  });
+
+  it("pairs on- colors with the fills that share their other words, with no cap", () => {
+    const fills = ["Accent", "Danger", "Info", "Neutral", "Success", "Warning"].map(
+      (intent) => `Bg.${intent}.Fill Emphasis.Default`,
+    );
+    const ids = [
+      "Text.Default",
+      "Bg.Canvas",
+      "Text.Neutral.Subtle on emphasis",
+      "Text.Strong on emphasis",
+      ...fills,
+    ];
+    const pairs = checkedPairs(inferConfig([colors(ids)]).pairs, ids);
+    expect(pairs.filter((pair) => pair.startsWith("Text.Neutral"))).toEqual([
+      "Text.Neutral.Subtle on emphasis on Bg.Neutral.Fill Emphasis.Default",
+    ]);
+    expect(pairs.filter((pair) => pair.startsWith("Text.Strong"))).toHaveLength(6);
+  });
+
+  it("leaves out colors that mix a reference with other text", () => {
+    const file = json("t.json", {
+      color: {
+        text: { default: color("#000000") },
+        bg: { canvas: color("#ffffff"), hover: color("rgba({color.text.default}, 0.1)") },
+      },
+    });
+    const config = inferConfig([file]);
+    expect(config.colorCount).toBe(2);
+    expect(config.pairs.flatMap((pair) => pair.bg)).not.toContain("color.bg.*");
+  });
+});
