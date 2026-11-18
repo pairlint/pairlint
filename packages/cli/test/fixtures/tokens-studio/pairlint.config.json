@@ -1,0 +1,7 @@
+{
+  "modes": {
+    "light": ["tokens.json#core", "tokens.json#light"],
+    "dark": ["tokens.json#core", "tokens.json#dark"]
+  },
+  "pairs": [{ "fg": "text.*", "bg": "bg.*" }]
+}

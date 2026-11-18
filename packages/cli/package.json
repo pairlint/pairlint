@@ -1,0 +1,52 @@
+{
+  "name": "pairlint",
+  "version": "0.1.0",
+  "description": "Check WCAG contrast for every text and background token pair, in every mode. Zero dependencies, works offline.",
+  "license": "MIT",
+  "type": "module",
+  "bin": {
+    "pairlint": "./dist/bin.js"
+  },
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "dist"
+  ],
+  "engines": {
+    "node": ">=22.14"
+  },
+  "keywords": [
+    "design-tokens",
+    "wcag",
+    "contrast",
+    "accessibility",
+    "a11y",
+    "lint",
+    "dtcg",
+    "tokens-studio",
+    "dark-mode"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/pairlint/pairlint.git",
+    "directory": "packages/cli"
+  },
+  "bugs": "https://github.com/pairlint/pairlint/issues",
+  "homepage": "https://github.com/pairlint/pairlint#readme",
+  "dependencies": {
+    "@pairlint/contrast": "0.1.0",
+    "@pairlint/tokens-core": "0.1.0"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json"
+  },
+  "publishConfig": {
+    "access": "public",
+    "provenance": true
+  }
+}

@@ -1,0 +1,17 @@
+{
+  "color": {
+    "$type": "color",
+    "gray": {
+      "50": { "$value": "#f8f9fa" },
+      "400": { "$value": "#9aa0a6" },
+      "500": { "$value": "#80868b" },
+      "700": { "$value": "#5f6368" },
+      "900": { "$value": "#202124" },
+      "950": { "$value": "#121212" }
+    },
+    "blue": {
+      "600": { "$value": { "colorSpace": "oklch", "components": [0.5, 0.2, 260] } }
+    },
+    "size": { "$type": "dimension", "$value": "4px" }
+  }
+}

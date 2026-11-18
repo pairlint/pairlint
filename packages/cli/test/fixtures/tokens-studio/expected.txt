@@ -1,0 +1,7 @@
+light
+  ✓ 1 pair passes
+
+dark
+  ✓ 1 pair passes
+
+0 failed, 2 passed across 2 modes (WCAG AA)

@@ -1,0 +1,41 @@
+{
+  "name": "@pairlint/contrast",
+  "version": "0.1.0",
+  "description": "WCAG 2.2 contrast math with CSS Color 4 parsing, alpha compositing and gamut mapping. No dependencies.",
+  "license": "MIT",
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "sideEffects": false,
+  "engines": {
+    "node": ">=22.14"
+  },
+  "keywords": [
+    "wcag",
+    "contrast",
+    "accessibility",
+    "a11y",
+    "color",
+    "oklch"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/pairlint/pairlint.git",
+    "directory": "packages/contrast"
+  },
+  "bugs": "https://github.com/pairlint/pairlint/issues",
+  "scripts": {
+    "build": "tsc -p tsconfig.json"
+  },
+  "publishConfig": {
+    "access": "public",
+    "provenance": true
+  }
+}
