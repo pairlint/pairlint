@@ -357,7 +357,7 @@ function runInit(context: RunContext, configArg: string, force: boolean): number
   const inferred = inferConfig(findTokenFiles(root));
   if (inferred.colorCount === 0) {
     throw new InputError(
-      `No color tokens found in ${root}. pairlint looks for DTCG, Tokens Studio and Style Dictionary JSON files, and CSS files with custom properties. Run init in the folder that holds them, or write the config by hand (see the README).`,
+      `No color tokens found in ${root}. pairlint looks for DTCG, Tokens Studio and Style Dictionary JSON and JSON5 files, and CSS files with custom properties. Run init in the folder that holds them, or write the config by hand (see the README).`,
     );
   }
   const schemaPath = toDisplayPath(

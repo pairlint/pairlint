@@ -70,16 +70,18 @@ const KEYS: Record<Exclude<TokenFormat, "css">, Keys> = {
 };
 
 const RESERVED_NAME_CHARS = /[.{}]/;
+const JSON5_PATH = /\.json5$/i;
 
 export function parseTokenFile(file: SourceFile, options: ParseTokensOptions = {}): ParsedTokens {
   if (options.format === "css" || isCssPath(file.path)) return parseCssTokens(file, options.set);
 
   let parsed: ReturnType<typeof parseJson>;
   try {
-    parsed = parseJson(file.text, { jsonc: true });
+    parsed = parseJson(file.text, { jsonc: true, json5: JSON5_PATH.test(file.path) });
   } catch (error) {
     if (error instanceof JsonParseError) {
-      throw new TokenFileError(`${file.path} is not valid JSON: ${error.reason}`, {
+      const kind = JSON5_PATH.test(file.path) ? "JSON5" : "JSON";
+      throw new TokenFileError(`${file.path} is not valid ${kind}: ${error.reason}`, {
         file: file.path,
         line: error.line,
         column: error.column,

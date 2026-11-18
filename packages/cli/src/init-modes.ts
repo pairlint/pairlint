@@ -199,7 +199,13 @@ export function planModes(sources: FoundSource[]): ModePlan {
           continue;
         }
         const name = unique(item.name === "" ? theme : item.name, takenThemes);
-        themeEntries.set(name, [...own, item.source.entry]);
+        // A file that only overrides some of the main file's tokens, like Primer's
+        // dark.dimmed.json5 on dark.json5, loads the main file first.
+        const main = new Set(primary?.source.colors);
+        const overrides =
+          item.source.colors.length < main.size && item.source.colors.every((id) => main.has(id));
+        const base = overrides && primary ? [primary.source.entry] : [];
+        themeEntries.set(name, [...own, ...base, item.source.entry]);
       }
     }
   }
