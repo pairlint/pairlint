@@ -6,7 +6,7 @@
 - The pair guessing behind `pairlint init` is exported as `inferPairs`.
 
 - `pairlint init` finds token files and CSS custom properties, names modes after the themes it finds, guesses pairs from token names, and writes a commented `pairlint.config.json`. It never overwrites a config without `--force`.
-- Official GitHub Action: `uses: pairlint/pairlint@v0.1.0` annotates failing tokens in the pull request diff, writes a job summary, and can write SARIF. Inputs reach the shell only through environment variables.
+- A GitHub Action for pairlint: `uses: pairlint/pairlint@v0.1.0` annotates failing tokens in the pull request diff, writes a job summary, and can write SARIF. Inputs reach the shell only through environment variables.
 - New `github` report format: workflow command annotations for each failure and warning.
 - `schema.json` ships with the package for editor completion and validation. Point `$schema` at `./node_modules/pairlint/schema.json`.
 - SARIF and annotation paths are relative to `GITHUB_WORKSPACE` when it is set, so they work when pairlint runs in a subfolder.

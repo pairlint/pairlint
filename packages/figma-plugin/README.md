@@ -34,6 +34,5 @@ The manifest's `id` is a placeholder for local use. Figma assigns the real one w
 ## Limits
 
 - Only color variables are read. Styles and colors set directly on layers are not.
-- Contrast is one part of WCAG. Passing does not make a design accessible or WCAG conformant.
 
-pairlint is not affiliated with or endorsed by Figma. Figma is a trademark of Figma, Inc.
+pairlint checks color contrast, which is one part of WCAG. Passing does not make a product accessible or WCAG conformant. pairlint is not affiliated with or endorsed by W3C, Figma or GitHub. WCAG is a W3C standard. Figma and GitHub are trademarks of their owners.

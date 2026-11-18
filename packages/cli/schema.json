@@ -13,7 +13,7 @@
       "description": "Path or URL of this schema, for editor completion."
     },
     "level": {
-      "description": "WCAG conformance level.",
+      "description": "The WCAG level whose contrast ratios pairs must meet.",
       "enum": ["AA", "AAA"],
       "default": "AA"
     },
