@@ -1,0 +1,350 @@
+{
+  "$schema": "https://json.schemastore.org/sarif-2.1.0.json",
+  "version": "2.1.0",
+  "runs": [
+    {
+      "tool": {
+        "driver": {
+          "name": "pairlint",
+          "version": "0.0.0-test",
+          "informationUri": "https://github.com/pairlint/pairlint",
+          "rules": [
+            {
+              "id": "body-text-contrast",
+              "name": "BodyTextContrast",
+              "shortDescription": {
+                "text": "Body text does not have enough contrast"
+              },
+              "fullDescription": {
+                "text": "Text smaller than 18pt (or 14pt bold) needs 4.5:1 for WCAG 1.4.3 AA, or 7:1 for 1.4.6 AAA."
+              },
+              "helpUri": "https://github.com/pairlint/pairlint#readme",
+              "defaultConfiguration": {
+                "level": "error"
+              },
+              "properties": {
+                "tags": [
+                  "accessibility",
+                  "wcag",
+                  "design-tokens"
+                ]
+              }
+            },
+            {
+              "id": "large-text-contrast",
+              "name": "LargeTextContrast",
+              "shortDescription": {
+                "text": "Large text does not have enough contrast"
+              },
+              "fullDescription": {
+                "text": "Text at least 18pt (or 14pt bold) needs 3:1 for WCAG 1.4.3 AA, or 4.5:1 for 1.4.6 AAA."
+              },
+              "helpUri": "https://github.com/pairlint/pairlint#readme",
+              "defaultConfiguration": {
+                "level": "error"
+              },
+              "properties": {
+                "tags": [
+                  "accessibility",
+                  "wcag",
+                  "design-tokens"
+                ]
+              }
+            },
+            {
+              "id": "ui-contrast",
+              "name": "UiContrast",
+              "shortDescription": {
+                "text": "A UI component or graphic does not have enough contrast"
+              },
+              "fullDescription": {
+                "text": "Borders, icons and other parts needed to understand a component need 3:1 for WCAG 1.4.11 AA."
+              },
+              "helpUri": "https://github.com/pairlint/pairlint#readme",
+              "defaultConfiguration": {
+                "level": "error"
+              },
+              "properties": {
+                "tags": [
+                  "accessibility",
+                  "wcag",
+                  "design-tokens"
+                ]
+              }
+            },
+            {
+              "id": "custom-contrast",
+              "name": "CustomContrast",
+              "shortDescription": {
+                "text": "A pair is below its custom minimum ratio"
+              },
+              "fullDescription": {
+                "text": "The pair has a custom minimum ratio set in pairlint.config.json."
+              },
+              "helpUri": "https://github.com/pairlint/pairlint#readme",
+              "defaultConfiguration": {
+                "level": "error"
+              },
+              "properties": {
+                "tags": [
+                  "accessibility",
+                  "wcag",
+                  "design-tokens"
+                ]
+              }
+            },
+            {
+              "id": "token-error",
+              "name": "TokenError",
+              "shortDescription": {
+                "text": "A token could not be checked"
+              },
+              "fullDescription": {
+                "text": "The token is missing, its alias cannot be resolved, or its value is not a color pairlint understands."
+              },
+              "helpUri": "https://github.com/pairlint/pairlint#readme",
+              "defaultConfiguration": {
+                "level": "error"
+              },
+              "properties": {
+                "tags": [
+                  "accessibility",
+                  "wcag",
+                  "design-tokens"
+                ]
+              }
+            },
+            {
+              "id": "token-warning",
+              "name": "TokenWarning",
+              "shortDescription": {
+                "text": "A token result may be approximate or a token was skipped"
+              },
+              "fullDescription": {
+                "text": "For example, a color outside the sRGB gamut, or a token name that cannot be referenced."
+              },
+              "helpUri": "https://github.com/pairlint/pairlint#readme",
+              "defaultConfiguration": {
+                "level": "warning"
+              },
+              "properties": {
+                "tags": [
+                  "accessibility",
+                  "wcag",
+                  "design-tokens"
+                ]
+              }
+            }
+          ]
+        }
+      },
+      "results": [
+        {
+          "ruleId": "ui-contrast",
+          "ruleIndex": 2,
+          "level": "error",
+          "message": {
+            "text": "color.border.default on color.surface.overlay (dark): 2.23:1 (#5f6368 on #2e2e2e), needs 3:1 for UI components and graphics (WCAG 1.4.11 AA). Try: point color.border.default at {color.gray.500} (3.66:1)."
+          },
+          "partialFingerprints": {
+            "pairlintPair": "dark|color.border.default|color.surface.overlay|ui"
+          },
+          "properties": {
+            "mode": "dark",
+            "fg": "color.border.default",
+            "bg": "color.surface.overlay"
+          },
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": "tokens/dark.json"
+                },
+                "region": {
+                  "startLine": 16,
+                  "startColumn": 7
+                }
+              }
+            }
+          ],
+          "relatedLocations": [
+            {
+              "id": 1,
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": "tokens/dark.json"
+                },
+                "region": {
+                  "startLine": 13,
+                  "startColumn": 7
+                }
+              },
+              "message": {
+                "text": "Background color.surface.overlay"
+              }
+            }
+          ]
+        },
+        {
+          "ruleId": "ui-contrast",
+          "ruleIndex": 2,
+          "level": "error",
+          "message": {
+            "text": "color.border.default on color.surface.raised (dark): 2.66:1 (#5f6368 on #202124), needs 3:1 for UI components and graphics (WCAG 1.4.11 AA). Try: point color.border.default at {color.gray.500} (4.37:1)."
+          },
+          "partialFingerprints": {
+            "pairlintPair": "dark|color.border.default|color.surface.raised|ui"
+          },
+          "properties": {
+            "mode": "dark",
+            "fg": "color.border.default",
+            "bg": "color.surface.raised"
+          },
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": "tokens/dark.json"
+                },
+                "region": {
+                  "startLine": 16,
+                  "startColumn": 7
+                }
+              }
+            }
+          ],
+          "relatedLocations": [
+            {
+              "id": 1,
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": "tokens/dark.json"
+                },
+                "region": {
+                  "startLine": 12,
+                  "startColumn": 7
+                }
+              },
+              "message": {
+                "text": "Background color.surface.raised"
+              }
+            }
+          ]
+        },
+        {
+          "ruleId": "body-text-contrast",
+          "ruleIndex": 0,
+          "level": "error",
+          "message": {
+            "text": "color.text.secondary on color.surface.overlay (dark): 3.66:1 (#80868b on #2e2e2e), needs 4.5:1 for body text (WCAG 1.4.3 AA). Try: point color.text.secondary at {color.gray.400} (5.11:1)."
+          },
+          "partialFingerprints": {
+            "pairlintPair": "dark|color.text.secondary|color.surface.overlay|body"
+          },
+          "properties": {
+            "mode": "dark",
+            "fg": "color.text.secondary",
+            "bg": "color.surface.overlay"
+          },
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": "tokens/dark.json"
+                },
+                "region": {
+                  "startLine": 6,
+                  "startColumn": 7
+                }
+              }
+            }
+          ],
+          "relatedLocations": [
+            {
+              "id": 1,
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": "tokens/dark.json"
+                },
+                "region": {
+                  "startLine": 13,
+                  "startColumn": 7
+                }
+              },
+              "message": {
+                "text": "Background color.surface.overlay"
+              }
+            }
+          ]
+        },
+        {
+          "ruleId": "body-text-contrast",
+          "ruleIndex": 0,
+          "level": "error",
+          "message": {
+            "text": "color.text.secondary on color.surface.raised (dark): 4.37:1 (#80868b on #202124), needs 4.5:1 for body text (WCAG 1.4.3 AA). Try: point color.text.secondary at {color.gray.400} (6.09:1)."
+          },
+          "partialFingerprints": {
+            "pairlintPair": "dark|color.text.secondary|color.surface.raised|body"
+          },
+          "properties": {
+            "mode": "dark",
+            "fg": "color.text.secondary",
+            "bg": "color.surface.raised"
+          },
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": "tokens/dark.json"
+                },
+                "region": {
+                  "startLine": 6,
+                  "startColumn": 7
+                }
+              }
+            }
+          ],
+          "relatedLocations": [
+            {
+              "id": 1,
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": "tokens/dark.json"
+                },
+                "region": {
+                  "startLine": 12,
+                  "startColumn": 7
+                }
+              },
+              "message": {
+                "text": "Background color.surface.raised"
+              }
+            }
+          ]
+        },
+        {
+          "ruleId": "token-warning",
+          "ruleIndex": 5,
+          "level": "warning",
+          "message": {
+            "text": "dark: color.text.link is outside the sRGB gamut, so results that use it are approximate"
+          },
+          "locations": [
+            {
+              "physicalLocation": {
+                "artifactLocation": {
+                  "uri": "tokens/dark.json"
+                },
+                "region": {
+                  "startLine": 8,
+                  "startColumn": 7
+                }
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

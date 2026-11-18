@@ -27,6 +27,9 @@ export {
 export { InputError } from "./errors.js";
 export { createFileReader, MAX_FILE_BYTES, type ReadFile } from "./files.js";
 export { formatExplainText } from "./report-explain.js";
+export { formatHtml, HTML_PALETTE, HTML_ROW_LIMIT, type HtmlOptions } from "./report-html.js";
 export { formatExplainJson, formatJson, JSON_SCHEMA_VERSION } from "./report-json.js";
+export { formatMarkdown, MARKDOWN_ROW_LIMIT } from "./report-markdown.js";
+export { formatSarif, SARIF_RULES, type SarifOptions } from "./report-sarif.js";
 export { formatLocation, formatText, type TextOptions } from "./report-text.js";
 export { ISSUES_URL, type RunContext, run } from "./run.js";

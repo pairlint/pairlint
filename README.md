@@ -137,7 +137,8 @@ pairlint [check] [options]
 pairlint explain <fg> <bg> [options]
 
   -c, --config <path>   Config file (default: ./pairlint.config.json)
-  -f, --format <name>   text or json (default: text)
+  -f, --format <name>   text, json, sarif, markdown or html (default: text)
+  -o, --output <path>   Write the report to a file instead of the terminal
   -l, --level <level>   AA or AAA, overrides the config
   -m, --mode <name>     Check only this mode. Repeat for more than one
       --verbose         List passing and exempt pairs too
@@ -154,7 +155,17 @@ Color is on in terminals and off in pipes and CI logs. `NO_COLOR` and `FORCE_COL
 | 2         | The config or a token file has a problem |
 | 3         | pairlint hit a bug. Please report it.    |
 
-`--format json` prints a versioned report (`"schemaVersion": 1`) with every result, ratio, color, suggestion and source location.
+### Reports
+
+| Format     | For                                     | What you get                                                                                  |
+| ---------- | --------------------------------------- | --------------------------------------------------------------------------------------------- |
+| `text`     | You, in a terminal                      | Failures grouped by mode, with fixes and file locations                                       |
+| `json`     | Scripts                                 | Every result, ratio, color, suggestion and location. Versioned with `"schemaVersion": 1`      |
+| `sarif`    | GitHub code scanning                    | SARIF 2.1.0. Failures show up as annotations on the token's line in pull requests             |
+| `markdown` | Pull request comments and job summaries | A short summary and a table of failures with suggested fixes                                  |
+| `html`     | Designers and stakeholders              | One self-contained page with color samples, ratios and fix previews, in light and dark themes |
+
+The HTML report has no scripts and loads nothing from the network, so you can attach it to a ticket or open it offline. It meets WCAG AA itself, and a test checks that.
 
 ### Fix suggestions
 
@@ -201,7 +212,22 @@ jobs:
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: 22
-      - run: npx --yes pairlint@0.1.0
+      - run: npx --yes pairlint@0.1.0 --format markdown --output "$GITHUB_STEP_SUMMARY"
+```
+
+The Markdown summary shows on the workflow run page. To see failures as annotations on the token files in pull requests, also upload SARIF to code scanning:
+
+```yaml
+permissions:
+  contents: read
+  security-events: write
+steps:
+  # checkout and setup-node as above
+  - run: npx --yes pairlint@0.1.0 --format sarif --output pairlint.sarif
+  - if: always()
+    uses: github/codeql-action/upload-sarif@33d7b85da1a04171e211befe2c739303b9a4c066 # v4.39.3
+    with:
+      sarif_file: pairlint.sarif
 ```
 
 Pin actions by commit SHA and pairlint by exact version, as shown, so nothing changes under you.
@@ -211,7 +237,7 @@ Pin actions by commit SHA and pairlint by exact version, as shown, so nothing ch
 - **It is not a conformance claim.** Passing means your token pairs meet the WCAG 2.2 contrast ratios. A site also needs those tokens used in the right places, and much more.
 - **It cannot check gradients or images.** Only flat colors and translucent layers.
 - **It does not use APCA.** WCAG 3 has not settled on a contrast method. An informational APCA column may come later, but it will never fail a build on its own.
-- **Not yet:** Style Dictionary and CSS custom property inputs, SARIF and HTML reports, and a Figma plugin. See the [roadmap](https://github.com/pairlint/pairlint/issues).
+- **Not yet:** Style Dictionary and CSS custom property inputs, and a Figma plugin. See the [roadmap](https://github.com/pairlint/pairlint/issues).
 
 ## Security
 
