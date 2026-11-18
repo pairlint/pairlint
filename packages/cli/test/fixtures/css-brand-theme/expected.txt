@@ -1,0 +1,73 @@
+acme/light
+  ✓ 9 pairs pass
+
+acme/dark
+  ✗ border on surface
+    2.35:1 (#475569 on #0f172a), needs 3:1 for UI components and graphics (WCAG 1.4.11 AA)
+    Try: point border at var(--gray-500) (3.75:1)
+    theme.css:24:3
+  ✗ border on surface-raised
+    1.93:1 (#475569 on #1e293b), needs 3:1 for UI components and graphics (WCAG 1.4.11 AA)
+    Try: point border at var(--gray-500) (3.07:1)
+    theme.css:24:3
+  ✗ brand-primary on surface
+    3.45:1 (#2563eb on #0f172a), needs 4.5:1 for body text (WCAG 1.4.3 AA)
+    Try: set brand-primary to #3878ff, or oklch(61% 0.215 262.9) (4.50:1)
+    brands.css:2:3
+  ✗ brand-primary on surface-raised
+    2.83:1 (#2563eb on #1e293b), needs 4.5:1 for body text (WCAG 1.4.3 AA)
+    Try: set brand-primary to #4e8bff, or oklch(66.4% 0.215 262.9) (4.50:1)
+    brands.css:2:3
+  ✗ on-brand on brand-primary
+    3.45:1 (#0f172a on #2563eb), needs 4.5:1 for body text (WCAG 1.4.3 AA)
+    Try: point on-brand at var(--gray-100) (4.71:1)
+    theme.css:25:3
+  ✗ text-muted on surface
+    3.75:1 (#64748b on #0f172a), needs 4.5:1 for body text (WCAG 1.4.3 AA)
+    Try: point text-muted at var(--gray-400) (6.96:1)
+    theme.css:21:3
+  ✗ text-muted on surface-raised
+    3.07:1 (#64748b on #1e293b), needs 4.5:1 for body text (WCAG 1.4.3 AA)
+    Try: point text-muted at var(--gray-400) (5.70:1)
+    theme.css:21:3
+  ✓ 2 pairs pass
+
+zen/light
+  ✗ brand-primary on surface
+    3.38:1 (#03a14a on #ffffff), needs 4.5:1 for body text (WCAG 1.4.3 AA)
+    Try: set brand-primary to #008933, or oklch(54.5% 0.17 150) (4.53:1)
+    brands.css:6:3
+  ✗ brand-primary on surface-raised
+    3.23:1 (#03a14a on #f8fafc), needs 4.5:1 for body text (WCAG 1.4.3 AA)
+    Try: set brand-primary to #008630, or oklch(53.4% 0.17 150) (4.50:1)
+    brands.css:6:3
+  ✗ on-brand on brand-primary
+    3.38:1 (#ffffff on #03a14a), needs 4.5:1 for body text (WCAG 1.4.3 AA)
+    Try: set on-brand to #252525, or oklch(26.6% 0 0) (4.52:1)
+    theme.css:16:3
+  ✓ 6 pairs pass
+
+zen/dark
+  ✗ border on surface
+    2.35:1 (#475569 on #0f172a), needs 3:1 for UI components and graphics (WCAG 1.4.11 AA)
+    Try: point border at var(--gray-500) (3.75:1)
+    theme.css:24:3
+  ✗ border on surface-raised
+    1.93:1 (#475569 on #1e293b), needs 3:1 for UI components and graphics (WCAG 1.4.11 AA)
+    Try: point border at var(--gray-500) (3.07:1)
+    theme.css:24:3
+  ✗ brand-primary on surface-raised
+    4.32:1 (#03a14a on #1e293b), needs 4.5:1 for body text (WCAG 1.4.3 AA)
+    Try: point surface-raised at var(--gray-900) (5.27:1)
+    brands.css:6:3
+  ✗ text-muted on surface
+    3.75:1 (#64748b on #0f172a), needs 4.5:1 for body text (WCAG 1.4.3 AA)
+    Try: point text-muted at var(--gray-400) (6.96:1)
+    theme.css:21:3
+  ✗ text-muted on surface-raised
+    3.07:1 (#64748b on #1e293b), needs 4.5:1 for body text (WCAG 1.4.3 AA)
+    Try: point text-muted at var(--gray-400) (5.70:1)
+    theme.css:21:3
+  ✓ 4 pairs pass
+
+15 failed, 21 passed across 4 modes (WCAG AA)

@@ -55,6 +55,42 @@ describe("pairlint on sample projects", () => {
     await expect(result.stdout).toMatchFileSnapshot("./fixtures/broken/expected.txt");
   });
 
+  it("checks a Style Dictionary 3 project with .value references", async () => {
+    const result = runCli([], { cwd: fixture("style-dictionary") });
+    expect(result.code).toBe(1);
+    expect(result.stderr).toBe("");
+    await expect(result.stdout).toMatchFileSnapshot("./fixtures/style-dictionary/expected.txt");
+  });
+
+  it("checks every brand and theme combination from CSS files", async () => {
+    const result = runCli([], { cwd: fixture("css-brand-theme") });
+    expect(result.code).toBe(1);
+    expect(result.stderr).toBe("");
+    await expect(result.stdout).toMatchFileSnapshot("./fixtures/css-brand-theme/expected.txt");
+  });
+
+  it("picks combined modes by one group value", () => {
+    const result = runCli(["-m", "dark", "-f", "json"], { cwd: fixture("css-brand-theme") });
+    expect(JSON.parse(result.stdout).modes).toEqual(["acme/dark", "zen/dark"]);
+    const one = runCli(["-m", "zen/light", "-f", "json"], { cwd: fixture("css-brand-theme") });
+    expect(JSON.parse(one.stdout).modes).toEqual(["zen/light"]);
+  });
+
+  it("suggests a mode name when -m has a typo", () => {
+    const result = runCli(["-m", "drak"], { cwd: fixture("css-brand-theme") });
+    expect(result.code).toBe(2);
+    expect(result.stderr).toContain('Unknown mode "drak". Did you mean "dark"?');
+  });
+
+  it("explains a CSS pair with its var() chain", async () => {
+    const result = runCli(["explain", "text-muted", "surface-raised", "-m", "acme/dark"], {
+      cwd: fixture("css-brand-theme"),
+    });
+    await expect(result.stdout).toMatchFileSnapshot(
+      "./fixtures/css-brand-theme/expected-explain.txt",
+    );
+  });
+
   it("accepts --config from another folder", () => {
     const result = runCli(["--config", "tokens-studio/pairlint.config.json"], { cwd: fixture("") });
     expect(result.code).toBe(0);

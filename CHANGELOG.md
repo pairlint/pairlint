@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- Style Dictionary 3 token files, detected automatically or set with `"format": "style-dictionary"`. References that end in `.value` resolve to the token.
+- CSS custom properties as tokens. Files ending in `.css` read `:root` by default, or a theme with `theme.css#[data-theme=dark]` or `theme.css#@media (prefers-color-scheme: dark)`. `var()` becomes an alias and its fallback is used when the target is missing.
+- Brand × theme modes: groups inside `modes` combine into every pairing, named like `acme/dark`. Pair `modes`, `base` and `--mode` accept a full name or one value such as `dark`.
+- `tokens` can now sit next to `modes` to hold files every mode loads first.
+- Fix suggestions only offer shades from a real scale (steps like `500` or `dark`), so a red token is no longer pointed at its green sibling. CSS suggestions are written as `var(--name)`. A background is only nudged to a nearby shade unless nothing else works.
+- `--mode` suggests the closest name when it does not match.
+
 - Baselines: `pairlint baseline --reason <text> --owner <name> [--expires <date>]` records today's failures in `pairlint.baseline.json` so only new failures break the build. Entries need a reason and an owner, can expire, and pairlint warns when one is no longer needed. `--ignore-baseline` shows everything. New `baseline` config setting and `baselined` result status.
 - New report formats: `sarif` for GitHub code scanning, `markdown` for pull request comments and job summaries, and `html`, a self-contained page for designers with color samples and fix previews.
 - New `--output <path>` option writes the report to a file.

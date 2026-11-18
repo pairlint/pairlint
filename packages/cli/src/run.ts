@@ -12,7 +12,7 @@ import {
   updateBaseline,
 } from "./baseline.js";
 import { type CheckReport, exitCode, explainPair, runCheck } from "./check.js";
-import { CONFIG_FILE, parseConfig } from "./config.js";
+import { CONFIG_FILE, modeNames, parseConfig } from "./config.js";
 import { InputError } from "./errors.js";
 import { createFileReader, MAX_FILE_BYTES, type ReadFile, toDisplayPath } from "./files.js";
 import { formatExplainText } from "./report-explain.js";
@@ -21,6 +21,7 @@ import { formatExplainJson, formatJson } from "./report-json.js";
 import { formatMarkdown } from "./report-markdown.js";
 import { formatSarif } from "./report-sarif.js";
 import { formatLocation, formatText } from "./report-text.js";
+import { closest } from "./suggest.js";
 
 export interface RunContext {
   argv: readonly string[];
@@ -164,10 +165,13 @@ function runOrThrow(context: RunContext): number {
 
   const modes = values.mode;
   if (modes) {
-    const known = config.modes.map((mode) => mode.name);
+    const known = modeNames(config.modes);
     for (const mode of modes) {
       if (!known.includes(mode)) {
-        throw new InputError(`Unknown mode "${mode}". The config defines: ${known.join(", ")}`);
+        const hint = closest(mode, known);
+        throw new InputError(
+          `Unknown mode "${mode}".${hint ? ` Did you mean "${hint}"?` : ""} The config defines: ${known.join(", ")}`,
+        );
       }
     }
   }

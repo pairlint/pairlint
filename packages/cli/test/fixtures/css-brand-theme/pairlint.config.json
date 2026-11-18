@@ -1,0 +1,20 @@
+{
+  // Two brands, each with a light and a dark theme: four modes.
+  "modes": {
+    "brand": {
+      "acme": ["brands.css#.acme"],
+      "zen": ["brands.css#.zen"]
+    },
+    "theme": {
+      "light": ["theme.css"],
+      "dark": ["theme.css", "theme.css#[data-theme=dark]"]
+    }
+  },
+  "base": { "dark": "{surface}" },
+  "pairs": [
+    { "fg": "text*", "bg": "surface*" },
+    { "fg": "brand-primary", "bg": "surface*" },
+    { "fg": "on-brand", "bg": "brand-primary" },
+    { "fg": "border", "bg": "surface*", "use": "ui" }
+  ]
+}

@@ -1,0 +1,26 @@
+/* Shared palette and the light theme */
+:root {
+  --gray-50: #f8fafc;
+  --gray-100: #f1f5f9;
+  --gray-400: #94a3b8;
+  --gray-500: #64748b;
+  --gray-600: #475569;
+  --gray-800: #1e293b;
+  --gray-900: #0f172a;
+
+  --text: var(--gray-900);
+  --text-muted: var(--gray-600);
+  --surface: #ffffff;
+  --surface-raised: var(--gray-50);
+  --border: var(--gray-500);
+  --on-brand: #ffffff;
+}
+
+[data-theme="dark"] {
+  --text: var(--gray-50);
+  --text-muted: var(--gray-500);
+  --surface: var(--gray-900);
+  --surface-raised: var(--gray-800);
+  --border: var(--gray-600);
+  --on-brand: var(--gray-900);
+}

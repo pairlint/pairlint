@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { InputError, parseConfig } from "../src/index.js";
+import { InputError, MAX_MODES, modeMatches, modeNames, parseConfig } from "../src/index.js";
 
 const parse = (value: unknown) =>
   parseConfig(JSON.stringify(value, null, 2), "pairlint.config.json");
@@ -67,6 +67,105 @@ describe("parseConfig", () => {
     expect(config.pairs[1]).toMatchObject({ use: "exempt", reason: "Decorative" });
   });
 
+  it("loads shared tokens first in every mode", () => {
+    const config = parse({
+      tokens: "core.json",
+      modes: { light: "l.json", dark: "d.json" },
+      pairs,
+    });
+    expect(config.modes.map((mode) => [mode.name, mode.sources.map((s) => s.path)])).toEqual([
+      ["light", ["core.json", "l.json"]],
+      ["dark", ["core.json", "d.json"]],
+    ]);
+  });
+
+  it("accepts the style-dictionary format", () => {
+    expect(parse({ tokens: "t.json", format: "style-dictionary", pairs }).format).toBe(
+      "style-dictionary",
+    );
+  });
+
+  it("combines groups of modes into every brand and theme pair", () => {
+    const config = parse({
+      tokens: ["core.json"],
+      modes: {
+        brand: { acme: ["acme.json"], zen: ["zen.css"] },
+        theme: { light: ["light.json"], dark: ["theme.css#[data-theme=dark]"] },
+      },
+      pairs,
+    });
+    expect(config.modes.map((mode) => mode.name)).toEqual([
+      "acme/light",
+      "acme/dark",
+      "zen/light",
+      "zen/dark",
+    ]);
+    expect(config.modes[3]).toEqual({
+      name: "zen/dark",
+      axes: { brand: "zen", theme: "dark" },
+      sources: [
+        { path: "core.json" },
+        { path: "zen.css" },
+        { path: "theme.css", set: "[data-theme=dark]" },
+      ],
+      base: "#ffffff",
+    });
+    expect(modeNames(config.modes)).toEqual([
+      "acme/light",
+      "acme",
+      "light",
+      "acme/dark",
+      "dark",
+      "zen/light",
+      "zen",
+      "zen/dark",
+    ]);
+  });
+
+  it("matches modes by full name or by group value", () => {
+    const config = parse({
+      modes: { brand: { acme: ["a.json"] }, theme: { light: ["l.json"], dark: ["d.json"] } },
+      pairs,
+    });
+    const [light, dark] = config.modes;
+    if (!light || !dark) throw new Error("expected two modes");
+    expect(modeMatches(dark, "acme/dark")).toBe(true);
+    expect(modeMatches(dark, "dark")).toBe(true);
+    expect(modeMatches(dark, "acme")).toBe(true);
+    expect(modeMatches(dark, "light")).toBe(false);
+    expect(modeMatches(light, "acme/dark")).toBe(false);
+  });
+
+  it("sets base colors by group value, then by full name", () => {
+    const config = parse({
+      modes: {
+        brand: { acme: ["a.json"], zen: ["z.json"] },
+        theme: { light: ["l.json"], dark: ["d.json"] },
+      },
+      base: { zen: "#fafafa", dark: "#000000", "acme/dark": "{bg.acme}" },
+      pairs: [{ fg: "a", bg: "b", modes: ["dark"] }],
+    });
+    expect(config.modes.map((mode) => [mode.name, mode.base])).toEqual([
+      ["acme/light", "#ffffff"],
+      ["acme/dark", "{bg.acme}"],
+      ["zen/light", "#fafafa"],
+      ["zen/dark", "#000000"],
+    ]);
+    expect(config.pairs[0]?.modes).toEqual(["dark"]);
+  });
+
+  it("refuses combinations past the mode limit", () => {
+    const group = Object.fromEntries(
+      Array.from({ length: 17 }, (_, i) => [`m${i}`, [`m${i}.json`]]),
+    );
+    const other = Object.fromEntries(
+      Array.from({ length: 17 }, (_, i) => [`n${i}`, [`n${i}.json`]]),
+    );
+    expect(() => parse({ modes: { a: group, b: other }, pairs })).toThrow(
+      `combine into 289 modes. pairlint allows up to ${MAX_MODES}`,
+    );
+  });
+
   it("accepts comments", () => {
     const config = parseConfig(
       '{\n  // tokens\n  "tokens": ["t.json"],\n  "pairs": [{"fg": "a", "bg": "b"},],\n}',
@@ -81,7 +180,24 @@ describe("parseConfig", () => {
       'Unknown setting "levle". Did you mean "level"?',
       '"levle"',
     ],
-    [{ tokens: ["t.json"], modes: { a: ["t.json"] }, pairs }, 'Use either "tokens"', '"modes"'],
+    [
+      { modes: { light: ["l.json"], brand: { acme: ["a.json"] } }, pairs },
+      '"light" is a list of files, but "brand" is a group of modes',
+      '"light"',
+    ],
+    [{ modes: { brand: {} }, pairs }, '"brand" needs at least one mode', '"brand"'],
+    [{ modes: { brand: { "a/b": ["a.json"] } }, pairs }, 'cannot be empty or contain "/"', '"a/b"'],
+    [{ modes: { brand: { acme: [] } }, pairs }, "List at least one token file", '"acme"'],
+    [
+      { tokens: ["t.json"], format: "css", pairs },
+      "Files ending in .css are always read as CSS",
+      '"format"',
+    ],
+    [
+      { modes: { theme: { light: ["l.json"] } }, pairs: [{ fg: "a", bg: "b", modes: ["drak"] }] },
+      'Unknown mode "drak"',
+      '"drak"',
+    ],
     [{ pairs }, "Say where your tokens are", null],
     [{ tokens: [], pairs }, "List at least one token file", '"tokens"'],
     [{ tokens: ["t.json#"], pairs }, 'has "#" but no set name', '"t.json#"'],
@@ -121,6 +237,13 @@ describe("parseConfig", () => {
     expect(error.message).toContain(message);
     expect(error.location?.file).toBe("pairlint.config.json");
     expect(error.location?.line).toBe(lineOf(value, needle));
+  });
+
+  it("refuses a mode name used in two groups and points at the second", () => {
+    const value = { modes: { brand: { dark: ["a.json"] }, theme: { dark: ["d.json"] } }, pairs };
+    const error = errorOf(value);
+    expect(error.message).toContain('"dark" is in both "brand" and "theme"');
+    expect(error.location?.line).toBe(lineOf(value, '"d.json"') - 1);
   });
 
   it("explains invalid JSON with a position", () => {

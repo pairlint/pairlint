@@ -1,0 +1,7 @@
+.acme {
+  --brand-primary: #2563eb;
+}
+
+.zen {
+  --brand-primary: oklch(0.62 0.17 150);
+}

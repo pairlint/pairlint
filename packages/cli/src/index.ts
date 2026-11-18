@@ -23,6 +23,7 @@ export {
   runCheck,
   type SideDetail,
   type Suggestion,
+  selectModes,
   sortResults,
   type Warning,
 } from "./check.js";
@@ -32,7 +33,10 @@ export {
   DEFAULT_BASE,
   DEFAULT_BASELINE,
   DEFAULT_MODE,
+  MAX_MODES,
   type ModeConfig,
+  modeMatches,
+  modeNames,
   type PairRule,
   type PairUse,
   parseConfig,
